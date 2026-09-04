@@ -41,10 +41,11 @@
 - id: vlotpipe-format
   name: vlotpipe format --check
   description: >-
-    Fail the commit if a staged pipeline file isn't in vlotpipe's
-    canonical style (key order, indentation). A stricter, higher-diff
-    alternative to the "vlotpipe"/"vlotpipe-fix" hooks — see
-    docs/GETTING_STARTED.md for the trade-off before enabling this one.
+    Fail the commit if a staged pipeline file's indentation doesn't
+    match its structural nesting depth. Surgical by default — only a
+    mis-indented line fails this, not key order or style choices — see
+    docs/GETTING_STARTED.md for the (bigger-diff) --reorder-keys
+    alternative before enabling that instead.
   entry: vlotpipe format --check
   language: golang
   files: '(^\.github/workflows/.*\.ya?ml$|(^|/)azure-pipelines\.ya?ml$)'

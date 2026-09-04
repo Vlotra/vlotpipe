@@ -75,7 +75,7 @@ repos:
     hooks:
       - id: vlotpipe          # check only
       # - id: vlotpipe-fix     # check, but auto-apply --fix first
-      # - id: vlotpipe-format  # format --check — bigger diffs, see below
+      # - id: vlotpipe-format  # format --check — surgical indent-only by default, see below
 ```
 
 Defined in [`.pre-commit-hooks.yaml`](../.pre-commit-hooks.yaml). Only

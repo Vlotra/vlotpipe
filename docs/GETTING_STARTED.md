@@ -183,29 +183,43 @@ Only five rules currently have one (`TIMEOUT001`, `AZR001`, `SEC006`,
 what its fix does). A rule earns an autofix only when applying it needs
 no judgment call; most rules don't and never will.
 
-`fix:` in `.vlotpipe.yml` tunes the two rules that insert a value rather
-than a fixed key — useful if a team wants `timeout-minutes` to stay a
-deliberate decision instead of a number `--fix` picked:
+`rules:` in `.vlotpipe.yml` tunes the two rules that insert a value
+rather than a fixed key — useful if a team wants `timeout-minutes` to
+stay a deliberate decision instead of a number `--fix` picked. It's a
+general per-code config section (not just for `--fix`) — see
+[`docs/adr/0002-rule-specific-runner-config.md`](adr/0002-rule-specific-runner-config.md)
+for the full shape, including `severity` overrides and other rules'
+special properties:
 
 ```yaml
-fix:
-  exclude:
-    - TIMEOUT001   # still fires and gets reported — just never auto-fixed
-  timeout_minutes: 15   # override the default (30) for the codes that aren't excluded
+rules:
+  TIMEOUT001:
+    fix: false          # still fires and gets reported — just never auto-fixed
+    fix_default: 15     # override the value --fix inserts (default: 30)
+  AZR001:
+    fix_default: 15     # independent of TIMEOUT001's own fix_default
 ```
 
-`vlotpipe format` is a different, bigger trade-off: a full
-parse-and-re-encode pass — canonical key order and consistent 2-space
-indent throughout the whole file, the way `gofmt` treats Go source. That
-means a large diff on the first run against a hand-formatted file
-(blank lines between blocks don't survive; comments do). `--check` lists
-what would change and exits 1 without writing, for a style gate separate
-from `check`'s content gate:
+`vlotpipe format` fixes indentation only, by default — a surgical text
+patch that rewrites just the lines whose leading whitespace disagrees
+with their structural nesting depth. A file with one inconsistently
+indented block produces a diff scoped to that block; blank lines,
+comments, quote style, and key order are all left exactly as they were.
+`--check` lists what would change and exits 1 without writing, for a
+style gate separate from `check`'s content gate:
 
 ```
-vlotpipe format .            # reformat in place
+vlotpipe format .            # fix indentation in place
 vlotpipe format . --check    # list what would change, exit 1 if anything would
 ```
+
+`--reorder-keys` opts into the older, bigger trade-off instead: a full
+parse-and-re-encode pass, canonical key order plus indentation
+throughout the whole file, the way `gofmt` treats Go source. That means
+a large diff on the first run against a hand-formatted file (blank
+lines between blocks don't survive that pass; comments do) — see
+[`docs/adr/0003-surgical-indent-fixer.md`](adr/0003-surgical-indent-fixer.md)
+for why the surgical pass is the default instead.
 
 ## Where to go next
 
@@ -222,7 +236,7 @@ vlotpipe format . --check    # list what would change, exit 1 if anything would
 vlotpipe scan [paths...]    # report every violation, always exits 0
 vlotpipe check [paths...]   # same scan, but exits 1 if a blocker is found — use this in CI
 vlotpipe init [dir]         # write a starter .vlotpipe.yml + a self-check CI workflow
-vlotpipe format [paths...]  # reformat pipeline files to a consistent style
+vlotpipe format [paths...]  # fix indentation to match structural nesting depth (surgical by default)
 ```
 
 Flags on `scan`/`check`:
@@ -242,7 +256,8 @@ Flag on `format`:
 
 | Flag | Description |
 | --- | --- |
-| `--check` | list files that would be reformatted, without writing; exit 1 if any would change |
+| `--check` | list files that would change, without writing; exit 1 if any would |
+| `--reorder-keys` | full parse-and-re-encode pass (canonical key order + indent throughout) instead of the default surgical indent-only fix — bigger diff, see above |
 
 All commands default to scanning `.` if no paths are given, and walk it
 for both `.github/workflows/*.yml` and `azure-pipelines.yml` (any

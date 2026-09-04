@@ -61,7 +61,7 @@ go install github.com/vlotra/vlotpipe/cmd/vlotpipe@latest
 vlotpipe scan [paths...]    # report every violation, always exits 0
 vlotpipe check [paths...]   # same scan, but exits 1 if a blocker is found — use this in CI
 vlotpipe init [dir]         # write a starter .vlotpipe.yml + a self-check CI workflow
-vlotpipe format [paths...]  # reformat pipeline files to a consistent style (see below)
+vlotpipe format [paths...]  # fix indentation to match structural nesting depth (see below)
 ```
 
 Both commands default to scanning `.` and walk it for both
@@ -126,20 +126,29 @@ fixed 4 violation(s)
 .github/workflows/ci.yml:9:3: SEC005 job 'build' has no permissions: set...
 ```
 
-**`vlotpipe format`** is a different trade-off entirely: a full
+**`vlotpipe format`** is a different trade-off entirely: a surgical text
+patch that rewrites only the lines whose leading whitespace disagrees
+with their structural nesting depth — never key order, never blank
+lines, never comments or quote style. A file with one
+inconsistently-indented block produces a diff scoped to that block, not
+a whole-file rewrite (see
+[`docs/adr/0003-surgical-indent-fixer.md`](docs/adr/0003-surgical-indent-fixer.md)).
+`--check` lists files that would change and exits 1 without writing,
+for a CI gate on style rather than content:
+
+```
+vlotpipe format .            # fix indentation in place
+vlotpipe format . --check    # list what would change, exit 1 if anything would
+```
+
+`--reorder-keys` opts into the older, bigger trade-off instead: a full
 parse-and-re-encode pass, the way `gofmt` treats Go source — canonical
 key order (workflow/pipeline root, then job, then step) and a
 consistent 2-space indent, applied throughout the whole file. That's a
-much bigger diff than `--fix`, and on first run against a hand-formatted
-file it will look disruptive: it does not preserve blank lines between
-blocks (the underlying YAML representation doesn't track them at all),
-though comments do survive. `--check` lists files that would change and
-exits 1 without writing, for a CI gate on style rather than content:
-
-```
-vlotpipe format .            # reformat in place
-vlotpipe format . --check    # list what would change, exit 1 if anything would
-```
+much bigger diff, and on first run against a hand-formatted file it will
+look disruptive: it does not preserve blank lines between blocks (the
+underlying YAML representation doesn't track them at all), though
+comments do survive.
 
 ## Rules
 

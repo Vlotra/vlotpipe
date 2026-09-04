@@ -71,6 +71,21 @@ actions-runner-controller, for example) *are* just as ephemeral as
 GitHub's own runners, so this can't be resolved with certainty from the
 YAML alone — hence a downgrade, not a suppression.
 
+## Asserting a runner is already cached
+
+If you know for certain a `runs-on:` label is a persistent worker that
+already has dependencies cached on disk, say so and get silence instead
+of the `info`-severity downgrade above — this is an asserted fact from
+the repo owner, not a heuristic, so it suppresses the finding entirely
+rather than just lowering its confidence:
+
+```yaml
+# .vlotpipe.yml
+rules:
+  PERF001:
+    cached_runners: ["gha-hmak-web", "*"]  # exact label, or "*" for any runner
+```
+
 ## Suppressing
 
 The finding is reported on the job's declaration line:

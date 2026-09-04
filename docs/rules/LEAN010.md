@@ -53,6 +53,19 @@ local build cache may well already be sitting on disk from the previous
 job on a persistent self-hosted worker, even with no `cache-from`/
 `cache-to` configured at all.
 
+## Asserting a runner is already cached
+
+Same mechanism as `PERF001`: if a `runs-on:` label is known for certain
+to be a persistent worker with Docker's build cache already on disk,
+say so and get silence instead of the `info`-severity downgrade above:
+
+```yaml
+# .vlotpipe.yml
+rules:
+  LEAN010:
+    cached_runners: ["gha-hmak-web"]  # exact label, or "*" for any runner
+```
+
 ## Suppressing
 
 The finding is reported on the step's line:

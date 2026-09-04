@@ -175,7 +175,8 @@ original round-1 or round-2 candidate lists — this one came directly
 from a "how do you keep pipelines from growing unbounded" framing, a
 different question from either "is it fast" or "is it safe"). Flags a
 job whose step count exceeds a threshold, defaulting to 20 but
-overridable via `.vlotpipe.yml`'s `max_steps_per_job:` — deliberately
+overridable via `.vlotpipe.yml`'s `rules.STRUCT002.max_steps` —
+deliberately
 configurable rather than fixed, since "how big is too big" is a genuine
 team-by-team judgment call in a way that, say, "should you cache
 dependencies" isn't. The default of 20 was calibrated the same way as

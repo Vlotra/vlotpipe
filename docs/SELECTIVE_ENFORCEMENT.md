@@ -76,6 +76,19 @@ vlotpipe check . --select SEC001,AZR002
 vlotpipe scan . --report-select SEC
 ```
 
+## Interaction with `rules.<CODE>.severity`
+
+A different, related knob: `select`/`report.select` decide *which codes
+participate at all* (in the gate, in output); `.vlotpipe.yml`'s
+`rules.<CODE>.severity` decides *what severity a participating code
+counts as*. They compose rather than overlap — downgrading `SEC001` to
+`warning` via `rules: SEC001: severity: warning` means a `select:
+[SEC001]` gate no longer fails on it (since the gate is still
+blocker-only by default), without SEC001 disappearing from `select`
+itself or from the report. See
+[`docs/adr/0002-rule-specific-runner-config.md`](adr/0002-rule-specific-runner-config.md)
+for the full `rules:` section.
+
 ## What this isn't
 
 Not a replacement for `--severity`. `--severity` is a floor by

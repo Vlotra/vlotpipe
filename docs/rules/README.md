@@ -56,6 +56,24 @@ A rule marked **Autofix: yes** below can be applied automatically with
 for what that does and doesn't cover. Only five rules have one; the rest
 need a human call.
 
+Every rule can also be tuned per repo via `.vlotpipe.yml`'s `rules:`
+section, keyed by exact code — two properties are generic and apply to
+every rule the same way, documented here once rather than on each page:
+
+- **`severity: blocker|warning|info`** — replaces the rule's shipped
+  severity everywhere it's consulted (display, the `check` gate, and
+  `report.to`), not just how it's colored in text output.
+- **`fix: false`** — for a rule that's normally autofixable, skip the
+  automatic edit only; the finding still fires and gets reported as
+  usual.
+
+A handful of rules also take a *special* property, meaningful only to
+that one rule — those are documented on that rule's own page instead
+(`STRUCT002.max_steps`, `PERF001`/`LEAN010.cached_runners`,
+`TIMEOUT001`/`AZR001.fix_default`). See
+[`docs/adr/0002-rule-specific-runner-config.md`](../adr/0002-rule-specific-runner-config.md)
+for the full reasoning behind the split.
+
 ## YAML
 
 | Code | Severity | Autofix | Checks |

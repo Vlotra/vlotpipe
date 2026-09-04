@@ -52,7 +52,9 @@ jobs:
 
 ```yaml
 # .vlotpipe.yml
-max_steps_per_job: 30
+rules:
+  STRUCT002:
+    max_steps: 30
 ```
 
 Unlike most rules, this one has no fixed "right" number — different

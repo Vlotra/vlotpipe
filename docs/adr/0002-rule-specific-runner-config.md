@@ -1,7 +1,8 @@
 # ADR 0002: `rules:` — generic + rule-specific per-code configuration
 
-**Status:** Proposed — not yet implemented. Supersedes an earlier draft
-of this same ADR that proposed two separate sections
+**Status:** Accepted, implemented (`internal/config`, `cmd/vlotpipe/main.go`,
+`internal/rules/baseline/cachedrunners.go`, `internal/fixer`). Supersedes
+an earlier draft of this same ADR that proposed two separate sections
 (`check.cached_runners`, `check.severity`); this revision unifies them
 (and the already-shipped `fix:` section — see Migration below) under
 one consistent shape instead of growing a new, differently-structured
@@ -132,25 +133,38 @@ users to break:
   code's own `fix_default`/other special properties living right next
   to it instead of in a separate section.
 
-Whoever implements this should decide whether the old top-level
-`max_steps_per_job` and the `fix:` section stay as deprecated aliases
-for one release or are a clean break — given no external users exist
-yet, a clean break is likely simpler and is the current lean, but
-worth a deliberate decision at implementation time rather than
-defaulting to either silently.
+**Decided at implementation time: a clean break, no deprecated aliases.**
+Both `max_steps_per_job` and `fix:` were removed from `internal/config.Config`
+outright rather than kept alongside `rules:` — pre-1.0, no external
+users, and a maintained alias would be extra surface for a shape this
+ADR already superseded. `fix.exclude`'s prefix-matching behavior
+(`fix.exclude: [AZR]` disabling every `AZR*` code's autofix in one
+entry) does not carry over: `rules:` is keyed by exact code only, by
+design (see Decision above), so the same result now takes one entry
+per code. `.vlotpipe.yml`'s template (`internal/config`'s `template`
+const) was updated in the same change to show `rules:` instead of the
+old `fix:` example.
 
 ## Consequences
 
-- `docs/rules/README.md` should document the two generic properties
-  once, centrally (`severity`, `fix`), and each rule page with a
-  special property documents that property specifically — the same
-  split as this ADR's Decision section.
-- `docs/SELECTIVE_ENFORCEMENT.md` needs a cross-reference: `select`/
-  `report.select` decide *which codes participate*, `rules.<CODE>.severity`
-  decides *what severity a participating code counts as* — related but
-  distinct, worth being explicit they compose rather than overlap.
+- `docs/rules/README.md` documents the two generic properties once,
+  centrally (`severity`, `fix`); `STRUCT002`, `PERF001`, `LEAN010`,
+  `TIMEOUT001`, and `AZR001`'s own pages each document their special
+  property in place of the config they replace — the same split as
+  this ADR's Decision section.
+- `docs/SELECTIVE_ENFORCEMENT.md` cross-references `rules.<CODE>.severity`
+  against `select`/`report.select`: the former decides *what severity a
+  participating code counts as*, the latter *which codes participate at
+  all* — related but distinct, and now stated explicitly there.
 - The `.vlotpipe.yml` template (`internal/config`'s `template` const)
-  gains a `rules:` example alongside the existing `select`/`report`/
-  `fix` ones, once this lands — and the existing `fix:` example in that
-  same template needs removing/updating per the Migration section above
-  so the template doesn't teach a shape that's about to be superseded.
+  shows a `rules:` example (severity, fix/fix_default, max_steps,
+  cached_runners) in place of the old `fix:` example.
+- `PERF001`/`LEAN010`'s `cached_runners` is verified end-to-end
+  (`internal/rules/baseline/baseline_test.go`'s
+  `TestCachedRunnersSuppressPerf001AndLean010`): a matching label
+  suppresses the finding entirely, not just downgrades it the way an
+  unrecognized `runs-on:` already did — and `rules.<CODE>.severity`
+  is verified to affect the `check` gate itself
+  (`cmd/vlotpipe/main_test.go`'s
+  `TestRuleSeverityOverrideAffectsGateNotJustDisplay`), not just
+  display, matching this ADR's explicit requirement in Decision.

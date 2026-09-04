@@ -1,6 +1,7 @@
 # ADR 0003: Surgical indent-only fixing, decoupled from key reordering
 
-**Status:** Proposed — not yet implemented.
+**Status:** Accepted, implemented (`internal/formatter.FormatIndentOnly`,
+`cmd/vlotpipe/main.go`'s `runFormat`).
 
 ## Context
 
@@ -48,14 +49,14 @@ one-block diff, not a whole-file rewrite.
 
 **Key reordering (opt-in)** — the canonical-key-order behavior
 `format` has today, kept available but no longer bundled silently into
-every run. Proposed as `vlotpipe format --reorder-keys` (name TBD at
-implementation time — could also be the inverse, e.g.
-`--indent-only` as the conservative flag and full reorder as the
-default, worth deciding deliberately rather than defaulting either way
-without discussion). Reordering inherently means moving lines, so it
-will always produce a real diff for whatever it touches — the point
-isn't to make that diff smaller, it's to make it something the caller
-explicitly asked for rather than a side effect of fixing indentation.
+every run. **Decided at implementation time: `vlotpipe format
+--reorder-keys`** — the conservative behavior (indent-only) is the
+bare `format` default, so the flag names the more disruptive path being
+opted *into*, rather than naming the safe path as if it needed an
+explanation. Reordering inherently means moving lines, so it will
+always produce a real diff for whatever it touches — the point isn't to
+make that diff smaller, it's to make it something the caller explicitly
+asked for rather than a side effect of fixing indentation.
 
 ### Implementation shape
 
@@ -79,22 +80,30 @@ carries over directly.
 
 ## Consequences
 
-- `docs/GETTING_STARTED.md`'s "Auto-fixing and formatting" section and
-  `docs/INTEGRATIONS.md` both currently warn that `format`'s first run
-  against a hand-formatted file "will produce a large diff." That
-  warning becomes wrong for the new default and needs rewriting once
-  this ships — the whole point is that it stops being true.
-- `.pre-commit-hooks.yaml`'s `vlotpipe-format` hook description
-  ("bigger diffs, see below") and `action.yml` docs referencing
-  `format`'s disruptiveness both need the same update.
-- Verification, once built: re-run the exact same 39-file/4-repo sample
-  this ADR's Context section used, and confirm the diff line count
-  drops sharply (not just the byte delta, which was never the real
-  problem) while `git diff --stat` on a file with a genuinely
-  inconsistent block still shows a real, correctly-scoped change for
-  that block specifically.
-- Worth deciding at implementation time whether `--check` (already
-  supported) needs to report *which lines* would change for the
-  indent-only mode, not just which files — since the whole feature is
-  about making the change surgical, the preview should probably be
-  equally surgical (a diff-style preview) rather than just a file list.
+- `docs/GETTING_STARTED.md`'s "Auto-fixing and formatting" section,
+  `README.md`, and `docs/INTEGRATIONS.md` no longer warn that `format`'s
+  first run "will produce a large diff" — that warning now describes
+  `--reorder-keys` specifically, not the default. `action.yml` turned
+  out not to reference `format`'s disruptiveness at all (checked at
+  implementation time, this ADR's own prediction was wrong on that
+  point) — nothing to change there.
+- `.pre-commit-hooks.yaml`'s `vlotpipe-format` hook description was
+  updated to describe the surgical default and point at `--reorder-keys`
+  for the bigger-diff alternative.
+- Verified with a real fixture (not the full 39-file/4-repo sample —
+  that would need those external repos checked out again, which wasn't
+  practical from this codebase alone): a single wrongly-indented
+  `branches:` line under an otherwise well-formatted GitHub Actions
+  workflow produces exactly a 1-line diff under the new default, versus
+  the same file's blank lines vanishing and two keys reordering under
+  the old full re-encode (still available via `--reorder-keys`).
+  `internal/formatter/formatter_test.go`'s
+  `TestFormatIndentOnlyTouchesOnlyTheWrongBlock` covers the same claim
+  as an automated test: a sibling job that's already canonical survives
+  byte for byte while only the inconsistently-indented job's lines move.
+- **Decided at implementation time: `--check` stays file-level**, same
+  as `Format`'s existing `--check` — no line-level diff preview yet.
+  The ADR's own Consequences left this open rather than mandating it;
+  scoping a diff-style preview (unified-diff output? a `--verbose`
+  flag?) is deferred to a future change if it turns out to matter in
+  practice, rather than guessed at here.

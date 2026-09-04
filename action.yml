@@ -1,0 +1,79 @@
+name: vlotpipe
+description: >-
+  Lint CI pipeline files (GitHub Actions, Azure Pipelines) for security,
+  performance, structural, and YAML style issues, with results posted as
+  inline pull request annotations.
+author: vlotra
+branding:
+  icon: shield
+  color: blue
+
+inputs:
+  paths:
+    description: Space-separated paths to scan (default ".", the whole repo)
+    required: false
+    default: "."
+  severity:
+    description: >-
+      Minimum severity to *report* as an annotation — blocker, warning,
+      or info. Independent of "fail-on", which controls the exit code.
+    required: false
+    default: "info"
+  fail-on:
+    description: >-
+      Minimum severity that fails the action — blocker, warning, info,
+      or "never" to always succeed (useful while a team is still
+      adopting this and doesn't want it gating merges yet).
+    required: false
+    default: "blocker"
+  version:
+    description: >-
+      A git ref (tag, branch, or commit) of vlotra/vlotpipe to build and
+      run. Defaults to "latest" — pinning the action itself
+      (uses: vlotra/vlotpipe@<sha-or-tag>) is usually enough on its own;
+      this input exists for the uncommon case of wanting a different
+      vlotpipe version than the action version.
+    required: false
+    default: "latest"
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5.5.0
+      with:
+        go-version-file: ${{ github.action_path }}/go.mod
+
+    - name: Install vlotpipe
+      shell: bash
+      run: go install "github.com/vlotra/vlotpipe/cmd/vlotpipe@${{ inputs.version }}"
+
+    - name: Run vlotpipe
+      shell: bash
+      run: |
+        BIN="$(go env GOPATH)/bin/vlotpipe"
+
+        # Human-facing pass: prints inline PR annotations. Always runs,
+        # independent of fail-on, so findings stay visible even while
+        # this action is configured not to fail the build on them yet.
+        "$BIN" scan ${{ inputs.paths }} --severity "${{ inputs.severity }}" --format github
+
+        if [ "${{ inputs.fail-on }}" = "never" ]; then
+          exit 0
+        fi
+
+        # "vlotpipe check"'s own exit code only distinguishes "any
+        # blocker-severity finding" from "none" (see
+        # cmd/vlotpipe/main.go) — not enough to support fail-on:
+        # warning/info. A second, silent JSON pass answers the real
+        # question: how many findings are at or above the requested
+        # fail-on threshold, regardless of severity name.
+        json="$("$BIN" scan ${{ inputs.paths }} --format json)"
+        count=$(echo "$json" | jq --arg floor "${{ inputs.fail-on }}" '
+          def weight(s): if s == "blocker" then 3 elif s == "warning" then 2 else 1 end;
+          [ .[] | select(weight(.severity) >= weight($floor)) ] | length
+        ')
+        if [ "$count" -gt 0 ]; then
+          echo "::error::$count violation(s) at or above fail-on: ${{ inputs.fail-on }} severity"
+          exit 1
+        fi

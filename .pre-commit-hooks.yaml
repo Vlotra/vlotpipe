@@ -1,0 +1,51 @@
+# Hook definitions for the pre-commit framework (https://pre-commit.com).
+# A consuming repo adds this to its own .pre-commit-config.yaml:
+#
+#   repos:
+#     - repo: https://github.com/vlotra/vlotpipe
+#       rev: v0.1.0  # pin to a tag once this repo has releases
+#       hooks:
+#         - id: vlotpipe
+#
+# "language: golang" tells pre-commit to build this module's binary
+# itself (matching go.mod's module path) — no separate install step, no
+# Docker image, nothing to publish beyond this repo existing and being
+# tagged. pre-commit invokes each hook with the list of staged files
+# matching "files:" as trailing arguments, which "vlotpipe scan/check"
+# already accepts directly (an explicit file list, not just a
+# directory) — no vlotpipe-side flag exists solely to support this.
+
+- id: vlotpipe
+  name: vlotpipe
+  description: >-
+    Lint staged CI pipeline files (GitHub Actions, Azure Pipelines) for
+    security, performance, structural, and YAML style issues. Fails the
+    commit on any blocker-severity finding.
+  entry: vlotpipe check
+  language: golang
+  files: '(^\.github/workflows/.*\.ya?ml$|(^|/)azure-pipelines\.ya?ml$)'
+  pass_filenames: true
+
+- id: vlotpipe-fix
+  name: vlotpipe (auto-fix)
+  description: >-
+    Same as the "vlotpipe" hook, but first applies "--fix" — the small,
+    safe subset of violations that have an unambiguous mechanical fix —
+    before checking, so those never block the commit in the first
+    place. Re-stage the file if it fixed something (pre-commit will ask).
+  entry: vlotpipe check --fix
+  language: golang
+  files: '(^\.github/workflows/.*\.ya?ml$|(^|/)azure-pipelines\.ya?ml$)'
+  pass_filenames: true
+
+- id: vlotpipe-format
+  name: vlotpipe format --check
+  description: >-
+    Fail the commit if a staged pipeline file isn't in vlotpipe's
+    canonical style (key order, indentation). A stricter, higher-diff
+    alternative to the "vlotpipe"/"vlotpipe-fix" hooks — see
+    docs/GETTING_STARTED.md for the trade-off before enabling this one.
+  entry: vlotpipe format --check
+  language: golang
+  files: '(^\.github/workflows/.*\.ya?ml$|(^|/)azure-pipelines\.ya?ml$)'
+  pass_filenames: true

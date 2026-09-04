@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Raw git pre-commit hook — for teams not using the pre-commit
+# framework (https://pre-commit.com; if you are, see
+# .pre-commit-hooks.yaml instead, it's less to maintain by hand).
+#
+# Install into a repo that wants this:
+#   cp scripts/pre-commit .git/hooks/pre-commit
+#   chmod +x .git/hooks/pre-commit
+#
+# Or symlink instead of copy, so updates to this script (if this repo's
+# own copy improves) apply automatically without re-copying:
+#   ln -sf ../../scripts/pre-commit .git/hooks/pre-commit
+#
+# Only lints staged pipeline files — not the whole repo — so this stays
+# fast even in a large monorepo; a full "vlotpipe check ." still belongs
+# in CI as the real gate (see docs/GETTING_STARTED.md).
+
+set -euo pipefail
+
+files=$(git diff --cached --name-only --diff-filter=ACM -- \
+  '.github/workflows/*.yml' '.github/workflows/*.yaml' \
+  'azure-pipelines.yml' 'azure-pipelines.yaml' \
+  '.azure-pipelines.yml' '.azure-pipelines.yaml' \
+  '**/azure-pipelines.yml' '**/azure-pipelines.yaml' \
+  '**/.azure-pipelines.yml' '**/.azure-pipelines.yaml')
+
+if [ -z "$files" ]; then
+  exit 0
+fi
+
+if ! command -v vlotpipe >/dev/null 2>&1; then
+  # Warn and let the commit through rather than hard-block a developer
+  # who hasn't installed the tool yet — this is meant to be an easy,
+  # gradual opt-in, not a wall. Change this to "exit 1" once the team
+  # has standardized on having vlotpipe installed everywhere.
+  echo "vlotpipe: not found on PATH, skipping pipeline lint (see docs/GETTING_STARTED.md to install)" >&2
+  exit 0
+fi
+
+echo "vlotpipe: checking staged pipeline files..."
+# shellcheck disable=SC2086
+vlotpipe check $files

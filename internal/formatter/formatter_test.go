@@ -295,3 +295,190 @@ func TestFormatRealFileStaysValidAndIdempotent(t *testing.T) {
 		})
 	}
 }
+
+func TestFormatIndentOnlyIsIdempotent(t *testing.T) {
+	// "on:"'s value block consistently uses a 4-space indent instead of
+	// the canonical 2 — valid YAML (a block's own indent amount is its
+	// choice, as long as it's internally consistent), and exactly the
+	// kind of thing this pass should normalize.
+	src := []byte(`on:
+    pull_request:
+        branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4 # a comment
+      - run: echo hi
+`)
+	first, err := FormatIndentOnly(src)
+	if err != nil {
+		t.Fatalf("FormatIndentOnly: %v", err)
+	}
+	mustParse(t, first)
+	second, err := FormatIndentOnly(first)
+	if err != nil {
+		t.Fatalf("FormatIndentOnly (second pass): %v", err)
+	}
+	if string(first) != string(second) {
+		t.Errorf("formatting an already-formatted file changed it:\n--- first ---\n%s\n--- second ---\n%s", first, second)
+	}
+}
+
+// TestFormatIndentOnlyTouchesOnlyTheWrongBlock is the core ADR 0003
+// claim: a file with exactly one inconsistently-indented block produces
+// a diff scoped to that block, not a whole-file rewrite — a sibling
+// job that's already canonical, and everything above the wrong block,
+// must survive byte for byte.
+func TestFormatIndentOnlyTouchesOnlyTheWrongBlock(t *testing.T) {
+	// build's steps consistently use an 8-space indent (valid YAML —
+	// each block picks its own indent amount); test's steps are already
+	// canonical at 6.
+	src := "jobs:\n" +
+		"  build:\n" +
+		"    runs-on: ubuntu-latest\n" +
+		"    steps:\n" +
+		"        - run: echo one\n" +
+		"        - run: echo two\n" +
+		"  test:\n" +
+		"    runs-on: ubuntu-latest\n" +
+		"    steps:\n" +
+		"      - run: echo three\n"
+	want := "jobs:\n" +
+		"  build:\n" +
+		"    runs-on: ubuntu-latest\n" +
+		"    steps:\n" +
+		"      - run: echo one\n" +
+		"      - run: echo two\n" +
+		"  test:\n" +
+		"    runs-on: ubuntu-latest\n" +
+		"    steps:\n" +
+		"      - run: echo three\n"
+	out, err := FormatIndentOnly([]byte(src))
+	if err != nil {
+		t.Fatalf("FormatIndentOnly: %v", err)
+	}
+	if string(out) != want {
+		t.Errorf("FormatIndentOnly output:\n%s\nwant:\n%s", out, want)
+	}
+}
+
+func TestFormatIndentOnlyPreservesBlankLinesAndComments(t *testing.T) {
+	src := []byte(`name: CI
+# a standalone comment, left exactly where it is
+on:
+    push:
+        branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest # trailing comment
+    steps:
+      - run: echo hi
+`)
+	out, err := FormatIndentOnly(src)
+	if err != nil {
+		t.Fatalf("FormatIndentOnly: %v", err)
+	}
+	mustParse(t, out)
+	s := string(out)
+	if !strings.Contains(s, "\n\njobs:") {
+		t.Errorf("blank line between blocks was not preserved:\n%s", s)
+	}
+	if !strings.Contains(s, "\n# a standalone comment, left exactly where it is\n") {
+		t.Errorf("standalone comment must be left untouched, unindented, exactly as written:\n%s", s)
+	}
+	if !strings.Contains(s, "# trailing comment") {
+		t.Errorf("trailing comment was dropped:\n%s", s)
+	}
+	if !strings.Contains(s, "\n  push:\n") {
+		t.Errorf("\"push:\", indented 4 spaces in the source, should have been fixed to the canonical 2:\n%s", s)
+	}
+}
+
+func TestFormatIndentOnlyNeverTouchesBlockScalarBody(t *testing.T) {
+	src := []byte(`jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo hi
+                  echo deliberately-over-indented
+      - run: echo done
+`)
+	out, err := FormatIndentOnly(src)
+	if err != nil {
+		t.Fatalf("FormatIndentOnly: %v", err)
+	}
+	if string(out) != string(src) {
+		t.Errorf("a block scalar's internal indentation is part of the string value and must never change:\n--- got ---\n%s\n--- want (unchanged) ---\n%s", out, src)
+	}
+}
+
+func TestFormatIndentOnlyUnindentedSequenceMatchesCanonicalDepth(t *testing.T) {
+	// Valid YAML: a sequence not indented under its key at all. The
+	// canonical target (same one Format's full re-encode already
+	// produces) is +2 per nesting level regardless, so this is expected
+	// to move — the point of the surgical pass is minimal diff on
+	// already-canonical files, not "never move a line."
+	src := []byte("list:\n- x\n- y\n")
+	want := "list:\n  - x\n  - y\n"
+	out, err := FormatIndentOnly(src)
+	if err != nil {
+		t.Fatalf("FormatIndentOnly: %v", err)
+	}
+	if string(out) != want {
+		t.Errorf("FormatIndentOnly = %q, want %q", out, want)
+	}
+}
+
+func TestFormatIndentOnlyEmptyFileIsUnchanged(t *testing.T) {
+	out, err := FormatIndentOnly([]byte(""))
+	if err != nil {
+		t.Fatalf("FormatIndentOnly: %v", err)
+	}
+	if string(out) != "" {
+		t.Errorf("expected an empty file to round-trip unchanged, got %q", out)
+	}
+}
+
+func TestFormatIndentOnlyRejectsInvalidYAML(t *testing.T) {
+	_, err := FormatIndentOnly([]byte("jobs: [this is not: closed"))
+	if err == nil {
+		t.Fatal("expected an error for invalid YAML, got nil")
+	}
+}
+
+// TestFormatIndentOnlyRealFilesStayValidAndIdempotent mirrors
+// TestFormatRealFileStaysValidAndIdempotent for the surgical pass —
+// platform doesn't matter here since indent canonicalization is purely
+// structural, not platform-specific key order.
+func TestFormatIndentOnlyRealFilesStayValidAndIdempotent(t *testing.T) {
+	paths := []string{
+		"../../testdata/github/good/.github/workflows/ci.yml",
+		"../../testdata/github/bad/.github/workflows/ci.yml",
+		"../../testdata/azure/good/azure-pipelines.yml",
+		"../../testdata/azure/bad/azure-pipelines.yml",
+	}
+	for _, path := range paths {
+		t.Run(path, func(t *testing.T) {
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("read: %v", err)
+			}
+			first, err := FormatIndentOnly(raw)
+			if err != nil {
+				t.Fatalf("FormatIndentOnly: %v", err)
+			}
+			mustParse(t, first)
+			second, err := FormatIndentOnly(first)
+			if err != nil {
+				t.Fatalf("FormatIndentOnly (second pass): %v", err)
+			}
+			if string(first) != string(second) {
+				t.Errorf("not idempotent on %s", path)
+			}
+		})
+	}
+}

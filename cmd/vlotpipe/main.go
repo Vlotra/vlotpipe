@@ -37,6 +37,7 @@ var (
 	flagStats        bool
 	flagInitForce    bool
 	flagFormatCheck  bool
+	flagReorderKeys  bool
 	flagSelect       string
 	flagReportSelect string
 	flagReportTo     string
@@ -112,18 +113,25 @@ func main() {
 
 	formatCmd := &cobra.Command{
 		Use:   "format [paths...]",
-		Short: "Reformat pipeline files to a consistent style (gofmt-style: total normalization, not a minimal diff)",
-		Long: "Reformat pipeline files: canonical key order (workflow/pipeline root, then job,\n" +
-			"then step) and a consistent 2-space indent. This is a full parse-and-re-encode\n" +
-			"pass, like gofmt for Go — the first run against a hand-formatted file will\n" +
-			"produce a large diff, including the loss of blank lines between blocks, which\n" +
-			"the underlying YAML representation doesn't track. If that's not the trade-off\n" +
-			"you want, \"vlotpipe scan/check --fix\" makes small, targeted edits instead.",
+		Short: "Fix indentation to match each line's structural nesting depth (surgical: only disagreeing lines change)",
+		Long: "Rewrite each line's leading whitespace to match its structural nesting depth —\n" +
+			"a surgical text patch, not a re-encode. Blank lines, comments, quote style, key\n" +
+			"order, and every already-correctly-indented line are left exactly as they were,\n" +
+			"byte for byte; a file with one inconsistently-indented block produces a diff\n" +
+			"scoped to that block (see docs/adr/0003-surgical-indent-fixer.md). Multi-line\n" +
+			"block scalars (run: |, script: |) are never touched — their content's\n" +
+			"indentation is part of the string, not a structural indent level.\n\n" +
+			"--reorder-keys opts into the older, bigger trade-off instead: a full\n" +
+			"parse-and-re-encode pass, canonical key order plus indentation throughout the\n" +
+			"whole file, the way gofmt treats Go source — blank lines between blocks don't\n" +
+			"survive that pass (comments do), so the first run against a hand-formatted file\n" +
+			"produces a much larger diff than the default.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runFormat(args, flagFormatCheck)
+			return runFormat(args, flagFormatCheck, flagReorderKeys)
 		},
 	}
-	formatCmd.Flags().BoolVar(&flagFormatCheck, "check", false, "list files that would be reformatted, without writing; exit 1 if any would change")
+	formatCmd.Flags().BoolVar(&flagFormatCheck, "check", false, "list files that would change, without writing; exit 1 if any would")
+	formatCmd.Flags().BoolVar(&flagReorderKeys, "reorder-keys", false, "full parse-and-re-encode pass with canonical key order, instead of the default surgical indent-only fix (bigger diff, see --help)")
 
 	for _, c := range []*cobra.Command{scanCmd, checkCmd} {
 		c.Flags().StringVar(&flagFormat, "format", "text", "output format: text, json, github, or azure-devops (auto-detected from the CI environment if omitted)")
@@ -434,8 +442,12 @@ func splitCommaList(s string) []string {
 // would change). Returns an error only for a hard failure (a path that
 // doesn't exist); a file that would be reformatted under --check is
 // reported via os.Exit(1), matching gofmt -l's convention of a
-// non-error, non-zero exit rather than a Go error value.
-func runFormat(paths []string, check bool) error {
+// non-error, non-zero exit rather than a Go error value. reorderKeys
+// selects the full parse-and-re-encode pass (formatter.Format); the
+// default is the surgical indent-only pass (formatter.FormatIndentOnly),
+// which needs no platform since indent canonicalization is purely
+// structural.
+func runFormat(paths []string, check, reorderKeys bool) error {
 	if len(paths) == 0 {
 		paths = []string{"."}
 	}
@@ -451,11 +463,16 @@ func runFormat(paths []string, check bool) error {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			continue
 		}
-		platform := model.PlatformAzurePipelines
-		if ghparser.Detect(f) {
-			platform = model.PlatformGitHubActions
+		var formatted []byte
+		if reorderKeys {
+			platform := model.PlatformAzurePipelines
+			if ghparser.Detect(f) {
+				platform = model.PlatformGitHubActions
+			}
+			formatted, err = formatter.Format(platform, raw)
+		} else {
+			formatted, err = formatter.FormatIndentOnly(raw)
 		}
-		formatted, err := formatter.Format(platform, raw)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: formatting %s: %v\n", f, err)
 			continue

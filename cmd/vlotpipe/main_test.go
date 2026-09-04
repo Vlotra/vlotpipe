@@ -425,3 +425,82 @@ func TestSuggestAzureStepOnlyWhenAzurePipelineExists(t *testing.T) {
 		t.Errorf("expected the suggested snippet to run vlotpipe check ., got:\n%s", got)
 	}
 }
+
+// TestRunFormatDefaultsToIndentOnly proves the CLI wiring: with no
+// --reorder-keys, "vlotpipe format" must use the surgical indent-only
+// pass (formatter.FormatIndentOnly), which never reorders keys — the
+// out-of-order "permissions" before "jobs" here must survive untouched,
+// only the mis-indented "runs-on:" line should move.
+func TestRunFormatDefaultsToIndentOnly(t *testing.T) {
+	dir := t.TempDir()
+	wfDir := filepath.Join(dir, ".github", "workflows")
+	if err := os.MkdirAll(wfDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	wfPath := filepath.Join(wfDir, "ci.yml")
+	// "jobs:" before "permissions:" is out of canonical GitHub Actions
+	// root order (name, on, permissions, ..., jobs) — indent-only mode
+	// must leave that alone. steps' 8-space indent is consistently
+	// wrong (should be 6) and must be the only thing that moves.
+	src := "jobs:\n" +
+		"  build:\n" +
+		"    runs-on: ubuntu-latest\n" +
+		"    steps:\n" +
+		"        - run: echo hi\n" +
+		"permissions:\n" +
+		"  contents: read\n"
+	if err := os.WriteFile(wfPath, []byte(src), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	if err := runFormat([]string{dir}, false, false); err != nil {
+		t.Fatalf("runFormat: %v", err)
+	}
+	got, err := os.ReadFile(wfPath)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	s := string(got)
+	if strings.Index(s, "jobs") > strings.Index(s, "permissions") {
+		t.Errorf("indent-only mode must never reorder keys — \"jobs\" should still precede \"permissions\":\n%s", s)
+	}
+	if !strings.Contains(s, "      - run: echo hi\n") {
+		t.Errorf("expected the mis-indented \"- run\" line to be fixed to 6 spaces:\n%s", s)
+	}
+}
+
+// TestRunFormatReorderKeysUsesFullFormat proves --reorder-keys switches
+// to formatter.Format: "jobs" before "permissions" is out of canonical
+// GitHub Actions root order, and must move under --reorder-keys, since
+// that's the whole point of opting into it (indent-only mode leaves it
+// alone — see the test above).
+func TestRunFormatReorderKeysUsesFullFormat(t *testing.T) {
+	dir := t.TempDir()
+	wfDir := filepath.Join(dir, ".github", "workflows")
+	if err := os.MkdirAll(wfDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	wfPath := filepath.Join(wfDir, "ci.yml")
+	src := "jobs:\n" +
+		"  build:\n" +
+		"    runs-on: ubuntu-latest\n" +
+		"    steps:\n" +
+		"      - run: echo hi\n" +
+		"permissions:\n" +
+		"  contents: read\n"
+	if err := os.WriteFile(wfPath, []byte(src), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	if err := runFormat([]string{dir}, false, true); err != nil {
+		t.Fatalf("runFormat: %v", err)
+	}
+	got, err := os.ReadFile(wfPath)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	s := string(got)
+	if strings.Index(s, "permissions") > strings.Index(s, "jobs") {
+		t.Errorf("--reorder-keys should have moved \"permissions\" before \"jobs\" (canonical GitHub Actions root order):\n%s", s)
+	}
+}

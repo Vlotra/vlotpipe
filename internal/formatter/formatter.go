@@ -24,6 +24,7 @@ package formatter
 import (
 	"bytes"
 	"sort"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -66,6 +67,123 @@ func Format(platform model.Platform, raw []byte) ([]byte, error) {
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+// FormatIndentOnly rewrites raw's leading whitespace, line by line, to
+// match each line's canonical indent (its structural nesting depth
+// times indent) — a surgical text patch, not a re-encode. Unlike
+// Format, this never reorders keys, never touches blank lines or
+// comments, and leaves a line's indent alone entirely if it already
+// agrees with what its nesting depth calls for. A file with one
+// inconsistently-indented block produces a one-block diff instead of a
+// whole-file rewrite (see ADR 0003). Content that fails to parse, or an
+// empty file, is returned unchanged for the same reason Format is: an
+// unparseable file is the scanner's problem to report, not this
+// package's.
+func FormatIndentOnly(raw []byte) ([]byte, error) {
+	var root yaml.Node
+	if err := yaml.Unmarshal(raw, &root); err != nil {
+		return nil, err
+	}
+	if len(root.Content) == 0 {
+		return raw, nil
+	}
+
+	canonical := map[int]int{}
+	protected := map[int]bool{}
+	walkIndent(root.Content[0], 0, canonical, protected)
+
+	lines := strings.Split(string(raw), "\n")
+	for i, line := range lines {
+		lineNo := i + 1
+		if protected[lineNo] {
+			continue // block scalar body — its indentation is part of the string value, never structural
+		}
+		want, ok := canonical[lineNo]
+		if !ok {
+			continue // blank line, standalone comment, or a line this pass has no opinion about
+		}
+		trimmed := strings.TrimLeft(line, " ")
+		if trimmed == "" {
+			continue
+		}
+		if have := len(line) - len(trimmed); have != want {
+			lines[i] = strings.Repeat(" ", want) + trimmed
+		}
+	}
+	return []byte(strings.Join(lines, "\n")), nil
+}
+
+// walkIndent records, in canonical, the indent every "line-starting"
+// node in the tree should have — a mapping key, or a sequence item's
+// dash — recursively, one indent step (2 spaces) per nesting level.
+// Only the first write for a given line wins: a sequence item that's
+// itself a mapping shares its opening line with the dash (e.g.
+// "- name: Checkout"), so that line's indent is the dash's, set by the
+// SequenceNode branch below, before recursing into the item mapping
+// would otherwise try to (wrongly) set it to the item's own, one level
+// deeper, indent.
+func walkIndent(n *yaml.Node, ind int, canonical map[int]int, protected map[int]bool) {
+	if n.Style&yaml.FlowStyle != 0 {
+		return // single-line (or hand-wrapped) flow collection; nothing structural to fix per line
+	}
+	switch n.Kind {
+	case yaml.MappingNode:
+		for i := 0; i+1 < len(n.Content); i += 2 {
+			key, val := n.Content[i], n.Content[i+1]
+			setIndentOnce(canonical, key.Line, ind)
+			if val.Line == key.Line {
+				continue // inline scalar/flow value on the key's own line
+			}
+			walkIndentChild(val, ind+indent, canonical, protected)
+		}
+	case yaml.SequenceNode:
+		for _, item := range n.Content {
+			setIndentOnce(canonical, item.Line, ind)
+			walkIndentChild(item, ind+indent, canonical, protected)
+		}
+	}
+}
+
+// walkIndentChild handles a node that starts on its own line — a
+// mapping value or sequence item — dispatching to the right treatment
+// by kind, including protecting a block scalar's body.
+func walkIndentChild(n *yaml.Node, ind int, canonical map[int]int, protected map[int]bool) {
+	switch n.Kind {
+	case yaml.MappingNode, yaml.SequenceNode:
+		walkIndent(n, ind, canonical, protected)
+	case yaml.ScalarNode:
+		if n.Style&(yaml.LiteralStyle|yaml.FoldedStyle) != 0 {
+			protectBlockScalarBody(n, protected)
+		}
+		// A plain/quoted scalar starting on its own line is rare in
+		// pipeline YAML and isn't a solved case here — left alone
+		// rather than guessed at.
+	}
+}
+
+func setIndentOnce(canonical map[int]int, line, ind int) {
+	if _, ok := canonical[line]; !ok {
+		canonical[line] = ind
+	}
+}
+
+// protectBlockScalarBody marks every physical line of a literal (|) or
+// folded (>) scalar's content as protected, so FormatIndentOnly never
+// touches it — that indentation is semantically part of the string,
+// not a structural YAML indent level. n.Line is the line the key
+// itself is on (e.g. "run: |"); content starts the line after.
+// gopkg.in/yaml.v3 always terminates n.Value with a final "\n" unless
+// the block used strip chomping ("|-"), so a trailing empty element
+// after splitting is dropped rather than counted as an extra line.
+func protectBlockScalarBody(n *yaml.Node, protected map[int]bool) {
+	lines := strings.Split(n.Value, "\n")
+	if len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	for i := range lines {
+		protected[n.Line+1+i] = true
+	}
 }
 
 // keyOrder returns a rank for each key name, lowest first; a key not

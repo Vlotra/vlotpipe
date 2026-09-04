@@ -35,6 +35,9 @@ func (missingCache) Check(p *model.Pipeline) []rules.Violation {
 		if !installsDeps(job) || hasCaching(job) {
 			continue
 		}
+		if isCachedRunner("PERF001", job.RunsOn) {
+			continue
+		}
 		// The "every run starts from nothing" assumption behind this rule
 		// only holds on an ephemeral runner. A self-hosted worker is often
 		// a persistent, reused machine, where the previous job may have

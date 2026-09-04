@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -107,22 +108,72 @@ func TestMatchesSelectAndReportSelectAreIndependent(t *testing.T) {
 	}
 }
 
-func TestFixExcludedDefaultsToExcludingNothing(t *testing.T) {
+func TestRuleFixDisabledDefaultsToFalse(t *testing.T) {
 	cfg := &Config{}
-	if cfg.FixExcluded("TIMEOUT001") {
-		t.Error("an empty Fix.Exclude must exclude nothing — the opposite default from Select/Report.Select")
+	if cfg.RuleFixDisabled("TIMEOUT001") {
+		t.Error("a code with no rules: entry at all must not be treated as fix-disabled")
 	}
 }
 
-func TestFixExcludedMatchesExactCodeAndPrefix(t *testing.T) {
-	cfg := &Config{Fix: FixConfig{Exclude: []string{"TIMEOUT001", "AZR"}}}
-	if !cfg.FixExcluded("TIMEOUT001") {
-		t.Error("TIMEOUT001 should be excluded (exact match)")
+func TestRuleFixDisabledIsExactCodeOnly(t *testing.T) {
+	f := false
+	cfg := &Config{Rules: map[string]RuleConfig{"TIMEOUT001": {Fix: &f}}}
+	if !cfg.RuleFixDisabled("TIMEOUT001") {
+		t.Error("TIMEOUT001 should be fix-disabled (fix: false)")
 	}
-	if !cfg.FixExcluded("AZR001") {
-		t.Error("AZR001 should be excluded (category prefix match)")
+	if cfg.RuleFixDisabled("AZR001") {
+		t.Error("rules: is keyed by exact code, unlike select/report.select — AZR001 must not inherit a sibling AZR002 entry or any prefix relationship")
 	}
-	if cfg.FixExcluded("SEC006") {
-		t.Error("SEC006 should not be excluded — not on the list")
+}
+
+func TestRuleSeverityUnsetReturnsFalse(t *testing.T) {
+	cfg := &Config{}
+	if _, ok := cfg.RuleSeverity("SEC001"); ok {
+		t.Error("a code with no rules: entry must report no severity override")
+	}
+}
+
+func TestRuleSeverityOverride(t *testing.T) {
+	sev := "warning"
+	cfg := &Config{Rules: map[string]RuleConfig{"SEC001": {Severity: &sev}}}
+	got, ok := cfg.RuleSeverity("SEC001")
+	if !ok || got != "warning" {
+		t.Errorf("RuleSeverity(SEC001) = %q, %v; want %q, true", got, ok, "warning")
+	}
+}
+
+func TestRuleRawIntAndStringSliceFromLoadedConfig(t *testing.T) {
+	dir := t.TempDir()
+	yml := `rules:
+  STRUCT002:
+    max_steps: 30
+  PERF001:
+    cached_runners: ["gha-hmak-web", "*"]
+  TIMEOUT001:
+    fix: false
+    fix_default: 15
+`
+	if err := os.WriteFile(filepath.Join(dir, FileName), []byte(yml), 0o644); err != nil {
+		t.Fatalf("writing test config: %v", err)
+	}
+	cfg, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if v, ok := cfg.RuleRawInt("STRUCT002", "max_steps"); !ok || v != 30 {
+		t.Errorf("STRUCT002.max_steps = %d, %v; want 30, true", v, ok)
+	}
+	if _, ok := cfg.RuleRawInt("STRUCT002", "no_such_key"); ok {
+		t.Error("an absent key must report ok=false, not a zero value")
+	}
+	if v, ok := cfg.RuleRawStringSlice("PERF001", "cached_runners"); !ok || len(v) != 2 || v[0] != "gha-hmak-web" || v[1] != "*" {
+		t.Errorf("PERF001.cached_runners = %v, %v; want [gha-hmak-web *], true", v, ok)
+	}
+	if v, ok := cfg.RuleRawInt("TIMEOUT001", "fix_default"); !ok || v != 15 {
+		t.Errorf("TIMEOUT001.fix_default = %d, %v; want 15, true", v, ok)
+	}
+	if !cfg.RuleFixDisabled("TIMEOUT001") {
+		t.Error("TIMEOUT001 should be fix-disabled")
 	}
 }

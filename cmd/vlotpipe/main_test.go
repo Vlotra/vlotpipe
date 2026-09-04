@@ -291,6 +291,55 @@ func TestReportSelectNarrowsOutputIndependentlyOfSelect(t *testing.T) {
 	}
 }
 
+// TestRuleSeverityOverrideAffectsGateNotJustDisplay proves
+// rules.<CODE>.severity (ADR 0002) is applied before the blocker gate
+// consumes it, not just before text output renders it — downgrading
+// SEC001 to warning must mean it stops failing check's default
+// blocker-only gate, exactly what the ADR's Decision section requires.
+func TestRuleSeverityOverrideAffectsGateNotJustDisplay(t *testing.T) {
+	repo := t.TempDir()
+	writeMixedSeverityFixture(t, repo)
+	restore := resetFlags()
+	defer restore()
+
+	// Before any override: both SEC001 and SEC002 are blockers, so the
+	// gate must fail.
+	_ = captureStdout(t, func() {
+		blockers, err := run([]string{repo}, true, false)
+		if err != nil {
+			t.Fatalf("run: %v", err)
+		}
+		if blockers == 0 {
+			t.Fatal("expected blockers > 0 before any severity override (SEC001/SEC002 are both blockers)")
+		}
+	})
+
+	cfgYAML := "rules:\n  SEC001:\n    severity: warning\n"
+	if err := os.WriteFile(filepath.Join(repo, ".vlotpipe.yml"), []byte(cfgYAML), 0o644); err != nil {
+		t.Fatalf("WriteFile .vlotpipe.yml: %v", err)
+	}
+	// Narrow the gate to SEC001 alone: if the severity override only
+	// affected display and not the gate, SEC001 would still count as a
+	// blocker here and this would still fail.
+	flagSelect = "SEC001"
+
+	var out string
+	var blockers int
+	out = captureStdout(t, func() {
+		var err error
+		blockers, err = run([]string{repo}, true, false)
+		if err != nil {
+			t.Fatalf("run: %v", err)
+		}
+	})
+	if blockers != 0 {
+		t.Errorf("blockers = %d, want 0 — SEC001 was downgraded to warning, so it must not gate even though select=SEC001", blockers)
+	}
+	if !strings.Contains(out, "warning") {
+		t.Errorf("expected SEC001 to display as warning severity after the override, got:\n%s", out)
+	}
+}
+
 func TestInitGitHubWorkflowWritesFile(t *testing.T) {
 	dir := t.TempDir()
 	path, wrote, err := initGitHubWorkflow(dir, false)

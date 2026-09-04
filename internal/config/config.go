@@ -83,20 +83,32 @@ custom_rules: []
 #   # for the env-var-only auth story (VLOTPIPE_REPORT_TOKEN).
 #   to: "https://dashboard.example.com/api/ingest"
 
-# fix: settings for "vlotpipe scan/check --fix" — see docs/rules/README.md
-# for which rules have an autofix at all. Both fields are optional.
+# rules: per-code configuration, keyed by exact rule code (never a
+# category prefix — unlike select/report.select above, which do prefix
+# match). Two generic properties every rule accepts (severity, fix);
+# everything else is rule-specific and documented on that rule's own
+# docs/rules/<CODE>.md page. See docs/adr/0002-rule-specific-runner-config.md
+# for the full reasoning.
 #
-# fix:
-#   # Never auto-fix these codes/prefixes, even though they're normally
-#   # fixable — the finding still fires and gets reported as usual, only
-#   # the automatic edit is skipped. Useful when a team wants
-#   # timeout-minutes (or anything else --fix would insert) to stay a
-#   # deliberate human decision rather than a value --fix picks for them.
-#   exclude:
-#     - TIMEOUT001
-#     - AZR001
-#   # Override the value TIMEOUT001's/AZR001's fix inserts (default: 30).
-#   timeout_minutes: 15
+# rules:
+#   SEC001:
+#     severity: warning       # replace this code's shipped severity —
+#                              # applies everywhere: display, the
+#                              # check gate, and the report.to push.
+#   STRUCT002:
+#     max_steps: 30            # STRUCT002-specific: the step-count threshold
+#   PERF001:
+#     cached_runners: ["gha-hmak-web", "*"]  # exact label or "*"; a
+#       # runner on this list is known to already have persistent
+#       # caching, so PERF001 never fires for a job on it at all.
+#   LEAN010:
+#     cached_runners: ["gha-hmak-web"]
+#   TIMEOUT001:
+#     fix: false                # still fires and gets reported — just
+#                                # never auto-fixed by --fix
+#     fix_default: 15           # override the value --fix inserts (default: 30)
+#   AZR001:
+#     fix_default: 15
 `
 
 // Init writes a starter .vlotpipe.yml to dir. It refuses to overwrite an
@@ -162,49 +174,132 @@ type ReportConfig struct {
 	To string `yaml:"to"`
 }
 
-// FixConfig scopes settings about "--fix" under its own named section,
-// same reasoning as ReportConfig: --fix is a distinct concern from
-// linting/reporting, with its own defaults, not a flat sibling key.
-type FixConfig struct {
-	// Exclude lists rule codes/prefixes that "--fix" must never touch,
-	// even though they're otherwise in fixer.FixableCodes. Unlike
-	// Select/Report.Select, an empty Exclude means "exclude nothing"
-	// (fix everything fixable) — the opposite default, because this is
-	// a blocklist, not an allowlist. The rule itself keeps firing and
-	// getting reported as normal; only the automatic edit is skipped,
-	// for a team that wants the finding to stay visible as a prompt for
-	// a human decision rather than have --fix quietly pick a value.
-	Exclude []string `yaml:"exclude"`
-	// TimeoutMinutes overrides the value TIMEOUT001's and AZR001's
-	// fixes insert (default 30 — see internal/fixer). 0 (unset) means
-	// "use the default."
-	TimeoutMinutes int `yaml:"timeout_minutes"`
+// RuleConfig is one rule code's entry under the rules: section (ADR
+// 0002): two generic properties meaningful for every rule (Severity,
+// Fix), plus Raw — everything else in that code's mapping, for rules
+// with their own special properties (STRUCT002's max_steps,
+// PERF001/LEAN010's cached_runners, TIMEOUT001/AZR001's fix_default).
+// Raw exists because special properties differ per rule; a single flat
+// struct with a field for every rule's every special property doesn't
+// scale the way the two generic ones do, so each rule that wants one
+// reads it out of Raw itself, by name, with its own fallback on
+// absence or a wrong type.
+type RuleConfig struct {
+	// Severity replaces this code's shipped severity everywhere it's
+	// consulted: display, the check gate, and the report.to push —
+	// never just a display-only recolor. nil means "use the rule's own
+	// default."
+	Severity *string
+	// Fix, when explicitly false, skips this code's automatic edit
+	// under --fix even though it's otherwise in fixer.FixableCodes; the
+	// finding still fires and gets reported as usual. nil/true (the
+	// default) means "fix if fixable."
+	Fix *bool
+	// Raw is every other key in this code's mapping, decoded as plain
+	// YAML scalars/sequences — the rule-specific escape hatch.
+	Raw map[string]any
+}
+
+// UnmarshalYAML decodes the two generic properties into their typed
+// fields and keeps everything else, verbatim, in Raw — so a rule with a
+// special property (e.g. "max_steps") doesn't need config to know its
+// name or type in advance.
+func (rc *RuleConfig) UnmarshalYAML(node *yaml.Node) error {
+	var known struct {
+		Severity *string `yaml:"severity"`
+		Fix      *bool   `yaml:"fix"`
+	}
+	if err := node.Decode(&known); err != nil {
+		return err
+	}
+	var raw map[string]any
+	if err := node.Decode(&raw); err != nil {
+		return err
+	}
+	delete(raw, "severity")
+	delete(raw, "fix")
+	rc.Severity = known.Severity
+	rc.Fix = known.Fix
+	rc.Raw = raw
+	return nil
 }
 
 type Config struct {
 	Ignores     []Ignore     `yaml:"ignore"`
 	CustomRules []CustomRule `yaml:"custom_rules"`
-	// MaxStepsPerJob overrides STRUCT002's default step-count threshold.
-	// 0 (unset) means "use the default."
-	MaxStepsPerJob int `yaml:"max_steps_per_job"`
 	// Select narrows which rule codes/prefixes can fail "check". Empty
 	// means every rule can gate the build (today's behavior). Independent
 	// of Report.Select — see ReportConfig's doc comment.
 	Select []string     `yaml:"select"`
 	Report ReportConfig `yaml:"report"`
-	Fix    FixConfig    `yaml:"fix"`
+	// Rules is the rules: section (ADR 0002), keyed by exact rule code
+	// — never a category prefix, unlike Select/Report.Select above.
+	Rules map[string]RuleConfig `yaml:"rules"`
 }
 
-// FixExcluded reports whether code is on the fix.exclude list — the
-// inverse of MatchesSelector's "empty means everything," since this is
-// a blocklist: empty Fix.Exclude means nothing is excluded.
-func (c *Config) FixExcluded(code string) bool {
-	for _, e := range c.Fix.Exclude {
-		if strings.HasPrefix(code, e) {
-			return true
+// RuleSeverity returns code's configured severity override ("blocker",
+// "warning", or "info"), and whether one was set at all.
+func (c *Config) RuleSeverity(code string) (string, bool) {
+	rc, ok := c.Rules[code]
+	if !ok || rc.Severity == nil {
+		return "", false
+	}
+	return *rc.Severity, true
+}
+
+// RuleFixDisabled reports whether code's rules: entry sets fix: false.
+// Exact-code lookup only — the rules: section deliberately doesn't
+// support the category-prefix matching Select/Report.Select do (see
+// ADR 0002's Migration section), so disabling every AZR* code's fix
+// takes one entry per code now instead of one shared prefix.
+func (c *Config) RuleFixDisabled(code string) bool {
+	rc, ok := c.Rules[code]
+	return ok && rc.Fix != nil && !*rc.Fix
+}
+
+// RuleRawInt reads an integer-valued special property (e.g.
+// STRUCT002's max_steps, TIMEOUT001's fix_default) out of code's Raw
+// map. ok is false if code has no rules: entry, the key is absent, or
+// its value isn't a number — callers fall back to the rule's own
+// default in every one of those cases identically.
+func (c *Config) RuleRawInt(code, key string) (int, bool) {
+	rc, ok := c.Rules[code]
+	if !ok {
+		return 0, false
+	}
+	switch v := rc.Raw[key].(type) {
+	case int:
+		return v, true
+	case int64:
+		return int(v), true
+	case uint64:
+		return int(v), true
+	case float64:
+		return int(v), true
+	default:
+		return 0, false
+	}
+}
+
+// RuleRawStringSlice reads a string-list special property (e.g.
+// PERF001/LEAN010's cached_runners) out of code's Raw map. ok is false
+// under the same absence/wrong-type conditions as RuleRawInt.
+func (c *Config) RuleRawStringSlice(code, key string) ([]string, bool) {
+	rc, ok := c.Rules[code]
+	if !ok {
+		return nil, false
+	}
+	raw, ok := rc.Raw[key].([]any)
+	if !ok {
+		return nil, false
+	}
+	out := make([]string, 0, len(raw))
+	for _, item := range raw {
+		if s, ok := item.(string); ok {
+			out = append(out, s)
 		}
 	}
-	return false
+	return out, true
 }
 
 // MatchesSelector reports whether code is selected by selectors: true

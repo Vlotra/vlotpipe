@@ -66,7 +66,7 @@ func TestFixTimeoutMinutesRespectsOptionsOverride(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	fixed, n, err := Fix(model.PlatformGitHubActions, []byte(src), rules.Run(p, nil), Options{TimeoutMinutes: 15})
+	fixed, n, err := Fix(model.PlatformGitHubActions, []byte(src), rules.Run(p, nil), Options{TimeoutMinutesByCode: map[string]int{"TIMEOUT001": 15}})
 	if err != nil {
 		t.Fatalf("Fix: %v", err)
 	}
@@ -79,6 +79,33 @@ func TestFixTimeoutMinutesRespectsOptionsOverride(t *testing.T) {
 	}
 	if p2.Jobs[0].TimeoutMinutes != 15 {
 		t.Errorf("TimeoutMinutes after fix = %d, want 15 (from Options override)\n--- fixed file ---\n%s", p2.Jobs[0].TimeoutMinutes, fixed)
+	}
+}
+
+// TestFixTimeoutMinutesByCodeAreIndependent confirms TIMEOUT001 and
+// AZR001 can carry different fix_default overrides at once — the point
+// of keying TimeoutMinutesByCode by code instead of one shared value.
+func TestFixTimeoutMinutesByCodeAreIndependent(t *testing.T) {
+	src := "jobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n"
+	p, err := ghparser.Parse("inline.yml", []byte(src))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	fixed, n, err := Fix(model.PlatformGitHubActions, []byte(src), rules.Run(p, nil), Options{
+		TimeoutMinutesByCode: map[string]int{"TIMEOUT001": 15, "AZR001": 45},
+	})
+	if err != nil {
+		t.Fatalf("Fix: %v", err)
+	}
+	if n == 0 {
+		t.Fatalf("expected at least one fix applied, got 0")
+	}
+	p2, err := ghparser.Parse("inline.yml", fixed)
+	if err != nil {
+		t.Fatalf("re-parse after fix: %v", err)
+	}
+	if p2.Jobs[0].TimeoutMinutes != 15 {
+		t.Errorf("TIMEOUT001's own override (15) wasn't applied, got %d", p2.Jobs[0].TimeoutMinutes)
 	}
 }
 

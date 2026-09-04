@@ -177,6 +177,24 @@ func run(paths []string, ci bool, formatFlagExplicit bool) (int, error) {
 		return 0, fmt.Errorf("%s: %w", config.FileName, err)
 	}
 
+	// PERF001/LEAN010 read cached_runners through a package-level setter
+	// rather than a Check(p) parameter, since both are ordinary
+	// registry-based rules (rules.Run only ever passes them a
+	// *model.Pipeline) — see ADR 0002 and internal/rules/baseline/cachedrunners.go.
+	// Set once per invocation, before rules.Run is called anywhere below.
+	for _, code := range []string{"PERF001", "LEAN010"} {
+		if runners, ok := cfg.RuleRawStringSlice(code, "cached_runners"); ok {
+			baseline.SetCachedRunners(code, runners)
+		}
+	}
+	maxSteps, _ := cfg.RuleRawInt("STRUCT002", "max_steps")
+	fixDefaults := map[string]int{}
+	for _, code := range []string{"TIMEOUT001", "AZR001"} {
+		if v, ok := cfg.RuleRawInt(code, "fix_default"); ok {
+			fixDefaults[code] = v
+		}
+	}
+
 	files, err := discoverWorkflows(paths)
 	if err != nil {
 		return 0, err
@@ -212,11 +230,11 @@ func run(paths []string, ci bool, formatFlagExplicit bool) (int, error) {
 		if flagFix {
 			var fixable []rules.Violation
 			for _, v := range rules.Run(p, ignore) {
-				if !cfg.FixExcluded(v.Code) {
+				if !cfg.RuleFixDisabled(v.Code) {
 					fixable = append(fixable, v)
 				}
 			}
-			fixed, n, ferr := fixer.Fix(p.Platform, raw, fixable, fixer.Options{TimeoutMinutes: cfg.Fix.TimeoutMinutes})
+			fixed, n, ferr := fixer.Fix(p.Platform, raw, fixable, fixer.Options{TimeoutMinutesByCode: fixDefaults})
 			if ferr != nil {
 				fmt.Fprintf(os.Stderr, "error: fixing %s: %v\n", f, ferr)
 			} else if n > 0 {
@@ -241,7 +259,7 @@ func run(paths []string, ci bool, formatFlagExplicit bool) (int, error) {
 				everything = append(everything, v)
 			}
 		}
-		for _, v := range baseline.CheckMaxStepsPerJob(p, cfg.MaxStepsPerJob) {
+		for _, v := range baseline.CheckMaxStepsPerJob(p, maxSteps) {
 			if !ignore(v.Code, v.Path) && !p.IsSuppressed(v.Line, v.Code) {
 				everything = append(everything, v)
 			}
@@ -255,6 +273,22 @@ func run(paths []string, ci bool, formatFlagExplicit bool) (int, error) {
 	for _, v := range repolevel.CheckDependencyUpdateTooling(cfgDir, pipelines) {
 		if !ignore(v.Code, v.Path) {
 			everything = append(everything, v)
+		}
+	}
+
+	// rules.<CODE>.severity (ADR 0002) applies here, once, before
+	// everything downstream reads Severity — the floor, select's gate,
+	// report.select's display filter, and the report.to push payload
+	// all need to see the overridden severity, not just text output's
+	// color.
+	for i := range everything {
+		sev, ok := cfg.RuleSeverity(everything[i].Code)
+		if !ok {
+			continue
+		}
+		switch rules.Severity(sev) {
+		case rules.SeverityBlocker, rules.SeverityWarning, rules.SeverityInfo:
+			everything[i].Severity = rules.Severity(sev)
 		}
 	}
 

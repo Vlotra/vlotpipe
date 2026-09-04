@@ -71,6 +71,48 @@ jobs:
 	}
 }
 
+// TestCachedRunnersSuppressPerf001AndLean010 covers the rules.<CODE>.cached_runners
+// special property (ADR 0002): a runner label the repo owner asserts
+// already has persistent caching suppresses PERF001/LEAN010 entirely on
+// a matching job — not just the severity downgrade
+// TestSelfHostedRunnerDowngradesCacheConfidence exercises above.
+func TestCachedRunnersSuppressPerf001AndLean010(t *testing.T) {
+	t.Cleanup(func() {
+		SetCachedRunners("PERF001", nil)
+		SetCachedRunners("LEAN010", nil)
+	})
+
+	src := `
+jobs:
+  build:
+    runs-on: my-office-mac-mini
+    steps:
+      - run: npm ci
+      - uses: docker/build-push-action@ca877d9245402d1537745e0e356eab639262a132
+        with:
+          push: true
+`
+	p, err := ghparser.Parse("inline.yml", []byte(src))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	if got := codes(rules.Run(p, nil)); got["PERF001"] == 0 || got["LEAN010"] == 0 {
+		t.Fatalf("expected both PERF001 and LEAN010 to fire before SetCachedRunners, got %v", got)
+	}
+
+	SetCachedRunners("PERF001", []string{"my-office-mac-mini"})
+	SetCachedRunners("LEAN010", []string{"*"})
+
+	got := codes(rules.Run(p, nil))
+	if got["PERF001"] != 0 {
+		t.Errorf("PERF001 should be suppressed for a runner on its cached_runners list, got %d hits", got["PERF001"])
+	}
+	if got["LEAN010"] != 0 {
+		t.Errorf("LEAN010 should be suppressed by the \"*\" wildcard, got %d hits", got["LEAN010"])
+	}
+}
+
 func TestInlineSuppressionComment(t *testing.T) {
 	p, err := ghparser.Parse("inline.yml", []byte(`
 jobs:

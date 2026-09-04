@@ -47,12 +47,22 @@ const defaultTimeoutMinutes = 30
 
 // Options configures how Fix applies its edits. The zero value
 // (Options{}) reproduces the original fixed behavior — 30-minute
-// timeouts, nothing excluded — so existing callers don't need to
-// change to keep working.
+// timeouts — so existing callers don't need to change to keep working.
 type Options struct {
-	// TimeoutMinutes overrides the value inserted for TIMEOUT001/AZR001.
-	// <= 0 means "use defaultTimeoutMinutes."
-	TimeoutMinutes int
+	// TimeoutMinutesByCode overrides the value inserted for TIMEOUT001
+	// and/or AZR001, keyed by code (.vlotpipe.yml's
+	// rules.TIMEOUT001.fix_default / rules.AZR001.fix_default — the two
+	// can differ from each other). A missing or <= 0 entry for a code
+	// falls back to defaultTimeoutMinutes.
+	TimeoutMinutesByCode map[string]int
+}
+
+// timeoutFor resolves the timeout value to insert for code.
+func (o Options) timeoutFor(code string) int {
+	if v, ok := o.TimeoutMinutesByCode[code]; ok && v > 0 {
+		return v
+	}
+	return defaultTimeoutMinutes
 }
 
 // insertion is "add this text as new whole line(s), immediately after
@@ -74,11 +84,6 @@ type insertion struct {
 // package only knows about the mechanics of a fix, not repo policy
 // about which ones to skip.
 func Fix(platform model.Platform, raw []byte, violations []rules.Violation, opts Options) ([]byte, int, error) {
-	timeoutMinutes := opts.TimeoutMinutes
-	if timeoutMinutes <= 0 {
-		timeoutMinutes = defaultTimeoutMinutes
-	}
-
 	var root yaml.Node
 	if err := yaml.Unmarshal(raw, &root); err != nil {
 		return raw, 0, err
@@ -93,9 +98,9 @@ func Fix(platform model.Platform, raw []byte, violations []rules.Violation, opts
 		var ins *insertion
 		switch v.Code {
 		case "TIMEOUT001":
-			ins = fixGHJobKey(doc, v, fmt.Sprintf("timeout-minutes: %d", timeoutMinutes))
+			ins = fixGHJobKey(doc, v, fmt.Sprintf("timeout-minutes: %d", opts.timeoutFor("TIMEOUT001")))
 		case "AZR001":
-			ins = fixAzureJobKey(doc, v, fmt.Sprintf("timeoutInMinutes: %d", timeoutMinutes))
+			ins = fixAzureJobKey(doc, v, fmt.Sprintf("timeoutInMinutes: %d", opts.timeoutFor("AZR001")))
 		case "SEC006":
 			ins = fixGHStepWithKey(doc, v, "persist-credentials", "false")
 		case "LEAN011":

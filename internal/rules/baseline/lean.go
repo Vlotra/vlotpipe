@@ -163,6 +163,9 @@ func (missingDockerBuildCache) Check(p *model.Pipeline) []rules.Violation {
 			if hasFrom && hasTo {
 				continue
 			}
+			if isCachedRunner("LEAN010", job.RunsOn) {
+				continue
+			}
 			// Same reasoning as PERF001: the "every build starts from
 			// zero" assumption only holds on an ephemeral runner. A
 			// persistent self-hosted worker keeps Docker's local build

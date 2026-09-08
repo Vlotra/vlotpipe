@@ -31,6 +31,17 @@ import (
 	"github.com/vlotra/vlotpipe/internal/yamllint"
 )
 
+// version/commit/date are set via -ldflags "-X main.version=... -X
+// main.commit=... -X main.date=..." (see .goreleaser.yml) at release
+// build time; a "go build"/"go run" without those flags falls back to
+// these defaults, which is the expected, honest state for a build from
+// source rather than a tagged release artifact.
+var (
+	version = "dev"
+	commit  = "unknown"
+	date    = "unknown"
+)
+
 var (
 	flagFormat       string
 	flagSeverity     string
@@ -50,6 +61,7 @@ func main() {
 		Use:           "vlotpipe [paths...]",
 		Short:         "vlotpipe finds risky and wasteful patterns in CI pipeline files",
 		Long:          "vlotpipe is a fast, opinionated policy linter for CI pipelines.\nIt scans GitHub Actions workflows and Azure Pipelines files for\nsecurity, structure, performance, and reliability issues.",
+		Version:       fmt.Sprintf("%s (commit %s, built %s)", version, commit, date),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}

@@ -1,0 +1,56 @@
+# goreleaser config for cross-platform release binaries + checksums.
+# Runs from .github/workflows/release.yml on a "v*" tag push.
+# See docs/adr/ for why nothing here is wired to actually publish yet:
+# this repo has no public remote, and "go install .../vlotpipe@latest"
+# needs one to resolve at all (see README's Status section).
+version: 2
+
+project_name: vlotpipe
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: vlotpipe
+    main: ./cmd/vlotpipe
+    binary: vlotpipe
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+
+archives:
+  - id: vlotpipe
+    formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+
+release:
+  # Draft, not published automatically — a human reviews and publishes
+  # from the GitHub UI. Cutting v0.1.0 for real is a deliberate decision
+  # (marketing Epic 5 #93), not something a CI run should do silently.
+  draft: true

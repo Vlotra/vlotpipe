@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vlotra/vlotpipe/internal/fingerprint"
 	"github.com/vlotra/vlotpipe/internal/rules"
 )
 
@@ -29,6 +30,16 @@ type Payload struct {
 	ScannedAt    time.Time         `json:"scanned_at"`
 	FilesScanned int               `json:"files_scanned"`
 	Violations   []rules.Violation `json:"violations"`
+	// Fingerprints is one entry per job with enough steps to fingerprint
+	// (see internal/fingerprint), always the complete set regardless of
+	// select/report-select — same "never narrowed" rule as Violations,
+	// since cross-repo clustering needs every job, not just the ones a
+	// given repo's local config chose to display. Each entry is a
+	// structural signature plus a file/job pointer, never step content —
+	// the dashboard can say "this job matches one in another repo" and
+	// point at both locations without either raw YAML ever leaving the
+	// scanning machine. See docs/adr/0004-duplicate-job-fingerprinting.md.
+	Fingerprints []fingerprint.Chunk `json:"fingerprints,omitempty"`
 }
 
 const requestTimeout = 10 * time.Second

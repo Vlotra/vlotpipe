@@ -288,6 +288,7 @@ internal/rules/          rule engine (Rule interface, registry, severity)
 internal/rules/baseline/ the rule pack (SEC/AZR/SUPPLY/LEAN/PERF/TIMEOUT/STRUCT)
 internal/rules/repolevel/ checks that need repo layout beyond one workflow file (SUPPLY001)
 internal/customrules/    .vlotpipe.yml custom_rules: evaluator — org policy without a rebuild
+internal/fingerprint/    near-duplicate job detection (simhash) — local teaser + report-to payload, see docs/adr/0004
 internal/fixer/          "--fix": small, targeted text edits for a curated, safe subset of rules
 internal/formatter/      "vlotpipe format": total re-encode with canonical key order + indent
 internal/yamllint/       YAML* rules: syntax validity, duplicate keys, whitespace, truthy values

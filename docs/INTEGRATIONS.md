@@ -152,9 +152,22 @@ The payload:
   "commit": "current commit, best-effort from git",
   "scanned_at": "RFC 3339 timestamp",
   "files_scanned": 12,
-  "violations": [ /* every finding — full Violation objects, same shape as --format json */ ]
+  "violations": [ /* every finding — full Violation objects, same shape as --format json */ ],
+  "fingerprints": [ /* one entry per job with enough steps to fingerprint, see below */ ]
 }
 ```
+
+`fingerprints` is the input to cross-repo duplicate-job detection (see
+[`docs/adr/0004-duplicate-job-fingerprinting.md`](adr/0004-duplicate-job-fingerprinting.md)):
+a structural signature (`internal/fingerprint`, simhash-based) plus a
+file/job pointer, deliberately never the job's actual step content — a
+job's `uses`/`run` text never leaves the scanning machine, only enough to
+let a central service say "this job matches one found elsewhere" and
+point at both locations. `vlotpipe scan`/`check` already print a local
+teaser (a bare cluster count, no detail) when two or more scanned jobs
+are near-duplicates of each other, entirely offline — this payload field
+is what lets that comparison happen fleet-wide instead of one scan at a
+time.
 
 There's no real dashboard server yet to push to — this defines the
 client contract for one that's a separate, later project (see the

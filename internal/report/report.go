@@ -63,6 +63,17 @@ func Text(w io.Writer, violations []rules.Violation, filesScanned int) {
 	)
 }
 
+// DuplicateSummary prints a one-line teaser naming how many near-duplicate
+// job clusters were found in this scan, without any detail about which
+// jobs or where — the detail (repo spread, drift, a golden-template
+// suggestion) is the paid Insights dashboard's job, not the free CLI's.
+// Callers should skip calling this at all when clusters is 0: a "0 found"
+// line is noise, not a teaser.
+func DuplicateSummary(w io.Writer, clusters int) {
+	fmt.Fprintf(w, "\n%d duplicate job cluster%s found across scanned files — full cross-repo breakdown + golden-template suggestions in Insights (paid, coming soon).\n",
+		clusters, plural(clusters))
+}
+
 func plural(n int) string {
 	if n == 1 {
 		return ""

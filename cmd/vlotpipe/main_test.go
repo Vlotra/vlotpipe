@@ -504,3 +504,81 @@ func TestRunFormatReorderKeysUsesFullFormat(t *testing.T) {
 		t.Errorf("--reorder-keys should have moved \"permissions\" before \"jobs\" (canonical GitHub Actions root order):\n%s", s)
 	}
 }
+
+// dupJobWorkflow writes a workflow whose one job has enough steps
+// (fingerprint.minSteps) to be fingerprinted, with a version pin that
+// varies by suffix — the near-duplicate case the teaser exists to catch,
+// not a byte-identical copy.
+func dupJobWorkflow(t *testing.T, repo, name, versionSuffix string) {
+	t.Helper()
+	wfDir := filepath.Join(repo, ".github", "workflows")
+	if err := os.MkdirAll(wfDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	wf := "on: push\n" +
+		"permissions:\n" +
+		"  contents: read\n" +
+		"jobs:\n" +
+		"  build:\n" +
+		"    runs-on: ubuntu-latest\n" +
+		"    timeout-minutes: 5\n" +
+		"    steps:\n" +
+		"      - uses: actions/checkout@v" + versionSuffix + "\n" +
+		"      - uses: actions/setup-node@v" + versionSuffix + "\n" +
+		"      - run: npm ci\n" +
+		"      - run: npm test\n"
+	if err := os.WriteFile(filepath.Join(wfDir, name), []byte(wf), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+}
+
+func TestRunPrintsDuplicateTeaserForTextFormatWhenClustersFound(t *testing.T) {
+	repo := t.TempDir()
+	dupJobWorkflow(t, repo, "a.yml", "3")
+	dupJobWorkflow(t, repo, "b.yml", "4")
+	restore := resetFlags()
+	defer restore()
+
+	out := captureStdout(t, func() {
+		if _, err := run([]string{repo}, false, false); err != nil {
+			t.Fatalf("run: %v", err)
+		}
+	})
+	if !strings.Contains(out, "duplicate job cluster") {
+		t.Errorf("stdout = %q, want it to contain the duplicate-cluster teaser line", out)
+	}
+}
+
+func TestRunOmitsDuplicateTeaserWhenNoClustersFound(t *testing.T) {
+	repo := t.TempDir()
+	dupJobWorkflow(t, repo, "a.yml", "3")
+	restore := resetFlags()
+	defer restore()
+
+	out := captureStdout(t, func() {
+		if _, err := run([]string{repo}, false, false); err != nil {
+			t.Fatalf("run: %v", err)
+		}
+	})
+	if strings.Contains(out, "duplicate job cluster") {
+		t.Errorf("stdout = %q, want no teaser line — only one job scanned, nothing to duplicate against", out)
+	}
+}
+
+func TestRunOmitsDuplicateTeaserForJSONFormat(t *testing.T) {
+	repo := t.TempDir()
+	dupJobWorkflow(t, repo, "a.yml", "3")
+	dupJobWorkflow(t, repo, "b.yml", "4")
+	restore := resetFlags()
+	defer restore()
+	flagFormat = "json"
+
+	out := captureStdout(t, func() {
+		if _, err := run([]string{repo}, false, true); err != nil {
+			t.Fatalf("run: %v", err)
+		}
+	})
+	if strings.Contains(out, "duplicate job cluster") {
+		t.Errorf("stdout = %q, want no teaser text mixed into --format json output", out)
+	}
+}

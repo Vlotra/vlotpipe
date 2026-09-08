@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vlotra/vlotpipe/internal/fingerprint"
 	"github.com/vlotra/vlotpipe/internal/rules"
 )
 
@@ -37,6 +38,9 @@ func TestPushSendsExpectedPayloadAndHeaders(t *testing.T) {
 		Violations: []rules.Violation{
 			{Code: "SEC001", Severity: rules.SeverityBlocker, Message: "m", Path: "a.yml", Line: 1, Col: 1},
 		},
+		Fingerprints: []fingerprint.Chunk{
+			{Path: "a.yml", JobID: "build", JobName: "Build", Line: 5, Signature: 0xdeadbeef},
+		},
 	}
 
 	if err := Push(srv.URL, "secret-token", payload); err != nil {
@@ -54,6 +58,9 @@ func TestPushSendsExpectedPayloadAndHeaders(t *testing.T) {
 	}
 	if len(gotBody.Violations) != 1 || gotBody.Violations[0].Code != "SEC001" {
 		t.Errorf("payload violations = %+v, want the one SEC001 finding", gotBody.Violations)
+	}
+	if len(gotBody.Fingerprints) != 1 || gotBody.Fingerprints[0].Signature != 0xdeadbeef {
+		t.Errorf("payload fingerprints = %+v, want the one build-job chunk", gotBody.Fingerprints)
 	}
 }
 

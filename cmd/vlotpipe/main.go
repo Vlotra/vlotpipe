@@ -16,6 +16,7 @@ import (
 
 	"github.com/vlotra/vlotpipe/internal/config"
 	"github.com/vlotra/vlotpipe/internal/customrules"
+	"github.com/vlotra/vlotpipe/internal/fingerprint"
 	"github.com/vlotra/vlotpipe/internal/fixer"
 	"github.com/vlotra/vlotpipe/internal/formatter"
 	"github.com/vlotra/vlotpipe/internal/model"
@@ -331,6 +332,14 @@ func run(paths []string, ci bool, formatFlagExplicit bool) (int, error) {
 		}
 	}
 
+	// Fingerprinting runs over every parsed pipeline regardless of
+	// severity floor/select — it's a structural property of the jobs
+	// themselves, not a violation, so none of the filtering above applies
+	// to it. Computed once and reused for both the local CLI teaser
+	// (text format only, see below) and the push payload.
+	fingerprintChunks := fingerprint.BuildChunks(pipelines)
+	duplicateGroups := fingerprint.Cluster(fingerprintChunks, fingerprint.DefaultThreshold)
+
 	effectiveFormat := flagFormat
 	if !formatFlagExplicit {
 		// Zero-config annotations: if the caller didn't ask for a
@@ -376,6 +385,14 @@ func run(paths []string, ci bool, formatFlagExplicit bool) (int, error) {
 		return 0, fmt.Errorf("invalid --format %q (want text, json, github, or azure-devops)", flagFormat)
 	}
 
+	// Teaser: only for the plain-text format. json/github/azure-devops are
+	// all structured output a machine parses (a stray line would corrupt
+	// JSON, or get mis-rendered as an annotation) — this is exactly the
+	// kind of narrow-format-check statistics output above already applies.
+	if (effectiveFormat == "text" || effectiveFormat == "") && len(duplicateGroups) > 0 {
+		report.DuplicateSummary(os.Stdout, len(duplicateGroups))
+	}
+
 	// Gate: select narrows *which codes* can fail the build; blocker
 	// severity still decides *whether* a match actually gates, unchanged
 	// from before select existed. select doesn't let a non-blocker gate
@@ -403,6 +420,7 @@ func run(paths []string, ci bool, formatFlagExplicit bool) (int, error) {
 			ScannedAt:    time.Now().UTC(),
 			FilesScanned: len(files),
 			Violations:   everything,
+			Fingerprints: fingerprintChunks,
 		}
 		if err := pushreport.Push(reportTo, os.Getenv("VLOTPIPE_REPORT_TOKEN"), payload); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: report_to push failed: %v\n", err)

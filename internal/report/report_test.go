@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/vlotra/vlotpipe/internal/fingerprint"
 	"github.com/vlotra/vlotpipe/internal/rules"
 )
 
@@ -70,5 +71,56 @@ func TestGitHubAnnotationsEmptyViolationsProducesNoOutput(t *testing.T) {
 	GitHub(&buf, nil)
 	if buf.Len() != 0 {
 		t.Errorf("expected no output for zero violations, got %q", buf.String())
+	}
+}
+
+// TestDuplicateClustersPrintsLocationsAndSimilarity proves the actual
+// file:line + job identity of each cluster member is printed, not just
+// a count — this is free, local, single-scan output, no different from
+// any other finding's precision.
+func TestDuplicateClustersPrintsLocationsAndSimilarity(t *testing.T) {
+	groups := []fingerprint.Group{
+		{Members: []fingerprint.Chunk{
+			{Path: "tests.yml", JobID: "codeception-frontend", JobName: "Codeception Frontend Tests", Line: 102, Signature: 0xF0F0F0F0F0F0F0F0},
+			{Path: "tests.yml", JobID: "codeception-backend", JobName: "Codeception Backend Tests", Line: 152, Signature: 0xF0F0F0F0F0F0F0F0},
+		}},
+	}
+	var buf bytes.Buffer
+	DuplicateClusters(&buf, groups)
+	out := buf.String()
+
+	for _, want := range []string{
+		"1 duplicate job cluster found",
+		"100% similar",
+		"tests.yml:102",
+		`"Codeception Frontend Tests"`,
+		"tests.yml:152",
+		`"Codeception Backend Tests"`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %q\n--- full output ---\n%s", want, out)
+		}
+	}
+}
+
+func TestDuplicateClustersFallsBackToJobIDWhenNameEmpty(t *testing.T) {
+	groups := []fingerprint.Group{
+		{Members: []fingerprint.Chunk{
+			{Path: "a.yml", JobID: "build", Line: 1, Signature: 0x1},
+			{Path: "b.yml", JobID: "build", Line: 1, Signature: 0x1},
+		}},
+	}
+	var buf bytes.Buffer
+	DuplicateClusters(&buf, groups)
+	if !strings.Contains(buf.String(), `job "build"`) {
+		t.Errorf("expected JobID fallback in output, got %q", buf.String())
+	}
+}
+
+func TestDuplicateClustersEmptyProducesNoOutput(t *testing.T) {
+	var buf bytes.Buffer
+	DuplicateClusters(&buf, nil)
+	if buf.Len() != 0 {
+		t.Errorf("expected no output for zero clusters, got %q", buf.String())
 	}
 }

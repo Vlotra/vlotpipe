@@ -59,12 +59,21 @@ template-generation to the dashboard, matching how ADR 0001 shipped
   vs. a coincidentally repo-name-shaped string) — that's the "language-
   awareness" open question neither write-up resolved, left alone rather
   than guessed at.
-- **CLI teaser, not a report.** `scan`/`check` print one line — a cluster
-  count, nothing else — only for the default text format and only when
-  clusters exist (a "0 found" line is noise). No file/job detail, no
-  JSON field, no `--format json` output changed. This is deliberately
-  the minimum that proves the mechanism works and creates upsell pull,
-  short of doing the dashboard's job for it.
+- **Full local detail, not a count-only teaser** (revised after the
+  first version of this ADR shipped a bare cluster count and got
+  challenged on it, correctly). `scan`/`check` print every cluster
+  found, with each member's exact `path:line` and job name — the same
+  precision every other finding in this tool gets. Withholding *which*
+  jobs matched, when the computation is 100% local and already done for
+  free, doesn't protect anything paid; it just makes the free tier worse
+  than every other linter output in this codebase for no reason. The
+  actual paid boundary was always aggregation *across many repos*, not
+  secrecy about a single scan's own output — no local scan of one repo
+  can tell you "this job also appears in 20 other repos across your
+  org," regardless of how much detail it prints about itself. Still text
+  format only (JSON output unchanged) — that boundary stands, since it's
+  about not growing the machine-readable contract prematurely, not about
+  hiding data.
 - **Fingerprints ride the existing push contract.** `pushreport.Payload`
   gained a `Fingerprints []fingerprint.Chunk` field alongside
   `Violations` — same "always the complete, unfiltered set" rule ADR 0001

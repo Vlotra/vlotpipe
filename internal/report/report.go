@@ -10,6 +10,7 @@ import (
 
 	"github.com/fatih/color"
 
+	"github.com/vlotra/vlotpipe/internal/fingerprint"
 	"github.com/vlotra/vlotpipe/internal/rules"
 )
 
@@ -63,15 +64,59 @@ func Text(w io.Writer, violations []rules.Violation, filesScanned int) {
 	)
 }
 
-// DuplicateSummary prints a one-line teaser naming how many near-duplicate
-// job clusters were found in this scan, without any detail about which
-// jobs or where — the detail (repo spread, drift, a golden-template
-// suggestion) is the paid Insights dashboard's job, not the free CLI's.
-// Callers should skip calling this at all when clusters is 0: a "0 found"
-// line is noise, not a teaser.
-func DuplicateSummary(w io.Writer, clusters int) {
-	fmt.Fprintf(w, "\n%d duplicate job cluster%s found across scanned files — full cross-repo breakdown + golden-template suggestions in Insights (paid, coming soon).\n",
-		clusters, plural(clusters))
+// DuplicateClusters prints every near-duplicate job cluster found in this
+// scan, listing each member's exact location — the same file:line
+// precision every other finding in this report gets. That's deliberate:
+// which jobs in *this* scan look like duplicates of each other is free,
+// local, single-invocation signal, no different in kind from any other
+// rule's output, so there's no reason to withhold it. What's actually
+// paid (Insights) is aggregating this across every repo in an org over
+// time — drift between "duplicate" copies, a golden-template suggestion
+// — which no single local scan can do regardless of what this function
+// prints. Callers should skip calling this at all when groups is empty:
+// a "0 found" line is noise, not a teaser. See ADR 0004.
+func DuplicateClusters(w io.Writer, groups []fingerprint.Group) {
+	if len(groups) == 0 {
+		return
+	}
+	fmt.Fprintln(w)
+	fmt.Fprintf(w, "%d duplicate job cluster%s found:\n\n", len(groups), plural(len(groups)))
+	for i, g := range groups {
+		fmt.Fprintf(w, "  cluster %d (%d jobs, %.0f%% similar):\n", i+1, len(g.Members), minPairwiseSimilarity(g.Members)*100)
+		for _, m := range g.Members {
+			fmt.Fprintf(w, "    %s job %q\n", dimColor.Sprintf("%s:%d", m.Path, m.Line), jobLabel(m))
+		}
+		fmt.Fprintln(w)
+	}
+	fmt.Fprintln(w, "Local, single-scan duplicate detection is free — that's the list above."+
+		" Insights (paid, coming soon) aggregates this across every repo in your org,"+
+		" tracks drift between \"duplicate\" copies over time, and suggests a golden"+
+		" template to collapse them into — none of which a single local scan can do.")
+}
+
+// jobLabel prefers a job's display name over its raw workflow-file ID,
+// since Name (e.g. "Codeception Backend Tests") is what a human
+// recognizes the job by; falls back to JobID when Name wasn't set.
+func jobLabel(c fingerprint.Chunk) string {
+	if c.JobName != "" {
+		return c.JobName
+	}
+	return c.JobID
+}
+
+// minPairwiseSimilarity is the lowest similarity between any two members
+// of a cluster — the conservative number to show, since it's the weakest
+// link that actually justifies grouping them together at all.
+func minPairwiseSimilarity(members []fingerprint.Chunk) float64 {
+	min := 1.0
+	for i := 0; i < len(members); i++ {
+		for j := i + 1; j < len(members); j++ {
+			if s := fingerprint.Similarity(members[i].Signature, members[j].Signature); s < min {
+				min = s
+			}
+		}
+	}
+	return min
 }
 
 func plural(n int) string {

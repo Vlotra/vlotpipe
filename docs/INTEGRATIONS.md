@@ -163,11 +163,12 @@ a structural signature (`internal/fingerprint`, simhash-based) plus a
 file/job pointer, deliberately never the job's actual step content — a
 job's `uses`/`run` text never leaves the scanning machine, only enough to
 let a central service say "this job matches one found elsewhere" and
-point at both locations. `vlotpipe scan`/`check` already print a local
-teaser (a bare cluster count, no detail) when two or more scanned jobs
-are near-duplicates of each other, entirely offline — this payload field
-is what lets that comparison happen fleet-wide instead of one scan at a
-time.
+point at both locations. `vlotpipe scan`/`check` already print every
+near-duplicate cluster found in a scan — each member's exact
+`path:line` and job name, entirely offline, no dashboard required — when
+two or more scanned jobs are near-duplicates of each other; this payload
+field is what lets that same comparison happen fleet-wide, across every
+repo in an org, instead of one scan at a time.
 
 There's no real dashboard server yet to push to — this defines the
 client contract for one that's a separate, later project (see the

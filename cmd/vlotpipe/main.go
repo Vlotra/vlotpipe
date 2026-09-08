@@ -390,7 +390,7 @@ func run(paths []string, ci bool, formatFlagExplicit bool) (int, error) {
 	// JSON, or get mis-rendered as an annotation) — this is exactly the
 	// kind of narrow-format-check statistics output above already applies.
 	if (effectiveFormat == "text" || effectiveFormat == "") && len(duplicateGroups) > 0 {
-		report.DuplicateSummary(os.Stdout, len(duplicateGroups))
+		report.DuplicateClusters(os.Stdout, duplicateGroups)
 	}
 
 	// Gate: select narrows *which codes* can fail the build; blocker

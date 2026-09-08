@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -575,7 +576,7 @@ func parseFileBytes(path string, data []byte) (*model.Pipeline, error) {
 const selfCheckWorkflowTemplate = `name: vlotpipe
 on:
   push:
-    branches: [main]
+    branches: [%s]
   pull_request:
 
 permissions:
@@ -598,6 +599,25 @@ jobs:
           fail-on: blocker
 `
 
+// defaultBranch best-effort-detects dir's current git branch, so the
+// generated workflow's "push: branches:" trigger matches the repo it's
+// actually being written into instead of assuming "main" — a repo
+// created before GitHub changed its own default (or one that just uses
+// "master" deliberately) would otherwise get a workflow that silently
+// never triggers on push. Every failure mode (not a git repo, detached
+// HEAD, no git binary) falls back to "main", the same "nice-to-have,
+// never blocking" shape as pushreport.GitMetadata.
+func defaultBranch(dir string) string {
+	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	branch := strings.TrimSpace(string(out))
+	if err != nil || branch == "" || branch == "HEAD" {
+		return "main"
+	}
+	return branch
+}
+
 // initGitHubWorkflow writes dir/.github/workflows/vlotpipe.yml — the
 // repo's own self-check gate — unless it already exists and force is
 // false, in which case it's skipped (not an error): the primary
@@ -615,7 +635,8 @@ func initGitHubWorkflow(dir string, force bool) (path string, wrote bool, err er
 	if err := os.MkdirAll(wfDir, 0o755); err != nil {
 		return path, false, err
 	}
-	if err := os.WriteFile(path, []byte(selfCheckWorkflowTemplate), 0o644); err != nil {
+	content := fmt.Sprintf(selfCheckWorkflowTemplate, defaultBranch(dir))
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		return path, false, err
 	}
 	return path, true, nil

@@ -1,0 +1,24 @@
+name: vlotpipe
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-pipelines:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: vlotra/vlotpipe@main # vlotpipe: ignore[SEC001] no tagged release exists yet; pin to one once it does
+        with:
+          fail-on: blocker

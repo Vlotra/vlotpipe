@@ -1,0 +1,90 @@
+# vlotpipe exception list — see https://github.com/vlotra/vlotpipe
+#
+# Two ways to suppress a finding:
+#
+# 1. Here, for a whole file/pattern, with a reason and (recommended) an
+#    expiry so the suppression doesn't silently outlive its justification:
+#
+# ignore:
+#   - code: STRUCT001
+#     path: "*"
+#     reason: "job naming convention doesn't include test/lint yet, tracked in VLOT-42"
+#     expires: "2026-12-31"
+#
+# 2. Inline, for one line, with a trailing comment in the workflow file
+#    itself — no entry needed here:
+#
+#   secrets: inherit # vlotpipe: ignore[SEC007]
+#   uses: some/action@v1 # vlotpipe: ignore
+
+ignore: []
+
+# Custom rules: org-specific policy, no Go code or rebuild required.
+# See docs/CUSTOM_RULES.md for the full field list. Example — catch a
+# job that satisfies TIMEOUT001 ("a timeout is set") by setting
+# timeout-minutes to GitHub's own 360-minute default, which isn't
+# actually a bound:
+#
+# custom_rules:
+#   - code: ORG001
+#     severity: warning
+#     scope: job
+#     field: timeout-minutes
+#     equals: "360"
+#     message: "timeout-minutes is set to the default; pick a real bound"
+
+custom_rules: []
+
+# select: which rule codes/prefixes can fail "check". Empty/omitted
+# means every rule can gate the build (today's behavior). "report:" is
+# a separate, independent named section — like ruff's separate "lint"
+# and "format" config — with its own "select" that defaults to "no
+# restriction" on its own; setting the gate above never implicitly
+# narrows what's reported. That split is what makes it possible to roll
+# a strict CI gate out gradually on an existing repo: gate on a small,
+# currently-clean set of rules today, while still seeing every finding
+# so you know what to widen the gate to next — rather than either
+# failing every open PR on day one, or gating on nothing at all until
+# the whole backlog is paid down.
+#
+# select:
+#   - SEC       # every SEC* code
+#   - AZR002    # or one specific code
+#
+# report:
+#   select:
+#     - SEC
+#     - AZR002
+#     - TIMEOUT001
+#   # Push the complete, unfiltered finding set (not narrowed by either
+#   # select above) to a dashboard endpoint after each scan. The URL is
+#   # fine to commit; never put a token here — see docs/INTEGRATIONS.md
+#   # for the env-var-only auth story (VLOTPIPE_REPORT_TOKEN).
+#   to: "https://dashboard.example.com/api/ingest"
+
+# rules: per-code configuration, keyed by exact rule code (never a
+# category prefix — unlike select/report.select above, which do prefix
+# match). Two generic properties every rule accepts (severity, fix);
+# everything else is rule-specific and documented on that rule's own
+# docs/rules/<CODE>.md page. See docs/adr/0002-rule-specific-runner-config.md
+# for the full reasoning.
+#
+# rules:
+#   SEC001:
+#     severity: warning       # replace this code's shipped severity —
+#                              # applies everywhere: display, the
+#                              # check gate, and the report.to push.
+#   STRUCT002:
+#     max_steps: 30            # STRUCT002-specific: the step-count threshold
+#   PERF001:
+#     cached_runners: ["gha-hmak-web", "*"]  # exact label or "*"; a
+#       # runner on this list is known to already have persistent
+#       # caching, so PERF001 never fires for a job on it at all.
+#   LEAN010:
+#     cached_runners: ["gha-hmak-web"]
+#   TIMEOUT001:
+#     fix: false                # still fires and gets reported — just
+#                                # never auto-fixed by --fix
+#     fix_default: 15           # override the value --fix inserts (default: 30)
+#   AZR001:
+#     fix_default: 15

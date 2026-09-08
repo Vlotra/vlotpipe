@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -337,6 +338,70 @@ func TestRuleSeverityOverrideAffectsGateNotJustDisplay(t *testing.T) {
 	}
 	if !strings.Contains(out, "warning") {
 		t.Errorf("expected SEC001 to display as warning severity after the override, got:\n%s", out)
+	}
+}
+
+func TestDefaultBranchFallsBackToMainOutsideAGitRepo(t *testing.T) {
+	dir := t.TempDir()
+	if got := defaultBranch(dir); got != "main" {
+		t.Errorf("defaultBranch(non-git dir) = %q, want %q", got, "main")
+	}
+}
+
+func TestDefaultBranchDetectsRealBranchName(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not on PATH")
+	}
+	dir := t.TempDir()
+	run := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	run("init", "-q", "-b", "trunk")
+	run("config", "user.email", "test@test.com")
+	run("config", "user.name", "test")
+	run("commit", "--allow-empty", "-q", "-m", "init")
+
+	if got := defaultBranch(dir); got != "trunk" {
+		t.Errorf("defaultBranch(git repo on trunk) = %q, want %q", got, "trunk")
+	}
+}
+
+// TestInitGitHubWorkflowUsesRealBranchName proves the generated
+// workflow's push trigger matches the repo it's written into — before
+// this, "vlotpipe init" on a repo whose default branch isn't "main"
+// (still common: "master", or a deliberately renamed trunk) produced a
+// workflow that silently never triggers on push.
+func TestInitGitHubWorkflowUsesRealBranchName(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not on PATH")
+	}
+	dir := t.TempDir()
+	run := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	run("init", "-q", "-b", "master")
+	run("config", "user.email", "test@test.com")
+	run("config", "user.name", "test")
+	run("commit", "--allow-empty", "-q", "-m", "init")
+
+	path, _, err := initGitHubWorkflow(dir, false)
+	if err != nil {
+		t.Fatalf("initGitHubWorkflow: %v", err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if !strings.Contains(string(got), "branches: [master]") {
+		t.Errorf("workflow content = %s, want it to trigger on \"branches: [master]\"", got)
 	}
 }
 

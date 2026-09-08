@@ -92,9 +92,9 @@ those runs found and fixed, as bugs in vlotpipe itself, is in
 
 Early and evolving. GitHub Actions and Azure Pipelines are both
 supported; GitLab CI is next. Expect the rule set and CLI surface to
-change before v1.0. This repo has no tagged releases and no public
-remote yet — build from source (below); `go install` isn't wired up
-until that changes.
+change before v1.0. This repo has no tagged releases yet — build from
+source (below); `go install` and binary releases aren't wired up until
+the first tag lands.
 
 ## Install
 
@@ -104,7 +104,7 @@ Build from source — the path that works today:
 go build -o vlotpipe ./cmd/vlotpipe
 ```
 
-Once this repo is published with tagged releases, this will also work:
+Once the first release is tagged, this will also work:
 
 ```
 go install github.com/vlotra/vlotpipe/cmd/vlotpipe@latest

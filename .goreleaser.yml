@@ -1,8 +1,8 @@
 # goreleaser config for cross-platform release binaries + checksums.
-# Runs from .github/workflows/release.yml on a "v*" tag push.
-# See docs/adr/ for why nothing here is wired to actually publish yet:
-# this repo has no public remote, and "go install .../vlotpipe@latest"
-# needs one to resolve at all (see README's Status section).
+# Runs from .github/workflows/release.yml on a "v*" tag push. The repo
+# is public now, but this hasn't run yet — no "v*" tag exists (see
+# README's Status section); "go install .../vlotpipe@latest" needs a
+# release, not just a public repo, to resolve anything.
 version: 2
 
 project_name: vlotpipe

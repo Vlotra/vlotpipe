@@ -19,6 +19,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: vlotra/vlotpipe@main # vlotpipe: ignore[SEC001] no tagged release exists yet; pin to one once it does
+      - uses: vlotra/vlotpipe@master # vlotpipe: ignore[SEC001] no tagged release exists yet; pin to one once it does
         with:
           fail-on: blocker

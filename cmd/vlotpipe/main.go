@@ -577,14 +577,17 @@ func parseFileBytes(path string, data []byte) (*model.Pipeline, error) {
 // own CI gate — and, being a real .github/workflows/*.yml file, is
 // itself something "vlotpipe scan" would lint. It's written to actually
 // pass that scan, not just to exist: actions/checkout is pinned to
-// 08eba0b27e820071cde6df949e0beb9ba4906955 (v7.0.1, verified against the
+// 3d3c42e5aac5ba805825da76410c181273ba90b1 (v7.0.1, verified against the
 // GitHub API when this was written, not guessed), has a timeout,
 // persist-credentials: false, and a concurrency group. The one
 // exception is SEC001 on the vlotra/vlotpipe step itself: it can't be
-// pinned to a commit SHA because this repo has no public remote or
-// tagged release yet to resolve one from — suppressed inline with the
-// reason on record, rather than silently failing vlotpipe's own SEC001,
-// the same way any real repo would document a deliberate exception.
+// pinned to a commit SHA because vlotra/vlotpipe has no tagged release
+// yet to resolve one from — suppressed inline with the reason on
+// record, rather than silently failing vlotpipe's own SEC001, the same
+// way any real repo would document a deliberate exception. References
+// vlotra/vlotpipe's own branch (master) directly, not %s — that
+// placeholder is the *consuming* repo's branch, a different repo than
+// the vlotpipe tool itself.
 const selfCheckWorkflowTemplate = `name: vlotpipe
 on:
   push:
@@ -603,10 +606,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: vlotra/vlotpipe@main # vlotpipe: ignore[SEC001] no tagged release exists yet; pin to one once it does
+      - uses: vlotra/vlotpipe@master # vlotpipe: ignore[SEC001] no tagged release exists yet; pin to one once it does
         with:
           fail-on: blocker
 `

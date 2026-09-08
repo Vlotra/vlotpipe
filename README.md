@@ -1,19 +1,43 @@
 # vlotpipe
 
-**ruff for pipelines, and yamllint for pipelines.**
+[![Go](https://img.shields.io/badge/go-1.26-00ADD8?logo=go)](go.mod)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![Tested against](https://img.shields.io/badge/tested_against-6_real_repos-brightgreen)](#tested-against)
 
-vlotpipe is a fast, opinionated linter for CI pipeline definitions —
-both halves of the job. It's a policy linter (the `SEC`/`AZR`/`PERF`/
-`LEAN`/`STRUCT` rules: security, performance, structure) *and* a
-pipeline-aware YAML style linter (the `YAML` rules: syntax validity,
-duplicate keys, ambiguous unquoted values) — the second half generic
+**vlotpipe is a linter for CI pipelines — GitHub Actions and Azure
+Pipelines.** ("ruff for pipelines, and yamllint for pipelines," if
+you want the short version.)
+
+Catch injection, credential, and supply-chain mistakes in your
+pipelines before they run:
+
+- An action pinned to a movable tag (`@v4`, `@main`) instead of a
+  commit SHA, leading to **silent supply-chain compromise** if that tag
+  ever gets repointed at a different commit.
+- Untrusted PR code checked out inside a `pull_request_target`/
+  `workflow_run`/`issue_comment` trigger, leading to **arbitrary code
+  execution with your repo's secrets and write access**.
+- Attacker-controlled input (an issue title, a PR body, a comment)
+  interpolated straight into a `run:` shell script, leading to
+  **arbitrary command execution via string injection** — no checkout
+  required.
+- A credential hardcoded into workflow YAML instead of referenced via
+  `secrets.*`, leading to **permanent leakage** in git history.
+- No `permissions:` block, or `secrets: inherit` on a reusable workflow
+  call, leading to **an over-privileged runner**.
+
+It's also a pipeline-aware YAML style linter — the half generic
 `yamllint` can't really do, since it has no notion of GitHub Actions or
-Azure Pipelines schema and either misses pipeline-specific context or
-flags things that are actually fine (its own `truthy` rule flags GitHub
-Actions' own `on:` key by default; vlotpipe's equivalent never does,
-because it only ever inspects values, not keys). Every finding reports
-the way a modern linter should: instantly, with a precise
-`file:line:col`, and with an exit code your CI can gate on.
+Azure Pipelines schema (its own `truthy` rule flags GitHub Actions' own
+`on:` key by default; vlotpipe's equivalent never does, because it only
+ever inspects values, not keys). And it isn't a binary "gate on
+everything or nothing" tool: `--select` lets a team gate `check` on a
+small, currently-clean set of rules today while still seeing the full
+backlog on every scan — see
+[`docs/SELECTIVE_ENFORCEMENT.md`](docs/SELECTIVE_ENFORCEMENT.md).
+
+Every finding reports the way a modern linter should: instantly, with a
+precise `file:line:col`, and with an exit code your CI can gate on.
 
 ```
 $ vlotpipe scan .
@@ -32,6 +56,27 @@ suppressing a finding — ten minutes, start to finish.
 gradually: CI annotations, a drop-in GitHub Action, a `pre-commit`
 framework hook, or a raw git hook — start with whichever has the least
 friction for where a team is today.
+
+## Tested against
+
+Before shipping a rule, it gets run against a real, actively-maintained
+pipeline and every finding — and every *absence* of a finding — gets
+verified against the actual source, not trusted on faith. Six runs so
+far, each picked to stress a different angle:
+
+| Repo | Why it was picked | Result |
+| --- | --- | --- |
+| [astral-sh/ruff](https://github.com/astral-sh/ruff) | Already runs zizmor with documented `# zizmor: ignore[...]` trade-offs — an adjudicated ground truth to check against | 0 blockers; `SEC007` findings matched zizmor's own 1:1, exactly |
+| [vitejs/vite](https://github.com/vitejs/vite) | Heavy bot/`pull_request_target` automation, also runs its own security scanners | Found a real gap (`issue_comment` missing from the dangerous-trigger list) — fixed |
+| [szluyu99/gin-vue-blog](https://github.com/szluyu99/gin-vue-blog) | Deliberately picked for weaker CI hygiene, to check the signal actually separates cases | 12 blockers from 2 files — real functional CI, no SHA-pinning or permission scoping |
+| [orbingol/aitos](https://github.com/orbingol/aitos) | Zero-star solo side project — contrast point against gin-vue-blog | 0 blockers — SHA-pinning tracks individual habit, not project fame |
+| [dotnet/roslyn](https://github.com/dotnet/roslyn) (Azure Pipelines) | Large (548-line), mature, advanced-feature pipeline maintained by Microsoft | Found a real parser bug on nested conditional insertion — fixed |
+| [AvaloniaUI/Avalonia](https://github.com/AvaloniaUI/Avalonia) (Azure Pipelines) | 31k+ stars, actively maintained, built partly by the team behind JetBrains Rider's UI | No timeout governance at all across the entire CI matrix — surfaced in under a second, zero config |
+
+Full write-up for each run — method, every finding spot-checked, bugs
+found and fixed along the way — in [`docs/VETTING_*.md`](docs). What
+those runs found and fixed, as bugs in vlotpipe itself, is in
+[`docs/TROPHY_CASE.md`](docs/TROPHY_CASE.md).
 
 ## Status
 

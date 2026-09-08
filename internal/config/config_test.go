@@ -242,3 +242,34 @@ func TestIgnoreMixesShorthandAndFullObjectForm(t *testing.T) {
 		t.Errorf("full-object entry = %+v, want Reason/Expires preserved", cfg.Ignores[1])
 	}
 }
+
+// TestParseMatchesLoad proves Parse (no filesystem) and Load (reads
+// then calls Parse) decode identically — Load is just Parse plus the
+// os.ReadFile step, not a separately-maintained code path.
+func TestParseMatchesLoad(t *testing.T) {
+	yml := "select:\n  - SEC\nreport:\n  select:\n    - SEC\n    - TIMEOUT001\n"
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, FileName), []byte(yml), 0o644); err != nil {
+		t.Fatalf("writing test config: %v", err)
+	}
+	fromLoad, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	fromParse, err := Parse([]byte(yml))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if len(fromLoad.Select) != len(fromParse.Select) || fromLoad.Select[0] != fromParse.Select[0] {
+		t.Errorf("Load.Select = %v, Parse.Select = %v, want identical", fromLoad.Select, fromParse.Select)
+	}
+	if len(fromLoad.Report.Select) != len(fromParse.Report.Select) {
+		t.Errorf("Load.Report.Select = %v, Parse.Report.Select = %v, want identical", fromLoad.Report.Select, fromParse.Report.Select)
+	}
+}
+
+func TestParseInvalidYAMLReturnsError(t *testing.T) {
+	if _, err := Parse([]byte("select: [\n")); err == nil {
+		t.Error("Parse with malformed YAML should return an error")
+	}
+}

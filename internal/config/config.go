@@ -365,6 +365,15 @@ func Load(dir string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	return Parse(data)
+}
+
+// Parse decodes .vlotpipe.yml content already in memory — the half of
+// Load that doesn't need a filesystem, split out for callers with no
+// file to read from (e.g. the WASM playground, parsing config text a
+// user typed into a browser textarea). Load itself is just Parse plus
+// the os.ReadFile step.
+func Parse(data []byte) (*Config, error) {
 	var c Config
 	if err := yaml.Unmarshal(data, &c); err != nil {
 		return nil, err

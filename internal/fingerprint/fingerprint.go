@@ -181,7 +181,7 @@ func Similarity(a, b uint64) float64 {
 // enough (at or above the clustering threshold) to be flagged as
 // duplicates of each other.
 type Group struct {
-	Members []Chunk
+	Members []Chunk `json:"members"`
 }
 
 // Cluster groups chunks whose pairwise similarity is at or above

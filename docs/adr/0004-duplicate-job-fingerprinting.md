@@ -86,6 +86,62 @@ template-generation to the dashboard, matching how ADR 0001 shipped
   reasoned starting point (documented inline in `fingerprint.go`), not a
   calibrated one
 
+## One known imprecision (tried a fix, reverted it, documenting instead)
+
+Vetting against a real multi-language monorepo (PHP/Yii2 backend +
+Angular frontend, 8 own workflow files) surfaced a shape neither the
+synthetic tests nor the source write-ups anticipated: two jobs running
+**completely different tools** (two different security scanners, one
+Nuclei-based, one ZAP-based) clustered as "duplicate jobs." On
+inspection, they aren't duplicated — they share one copy-pasted,
+multi-word `run:` guard clause ("skip this job if `$TARGET_URL` is
+unset") wrapped around otherwise-unrelated automation. The guard
+clause's word count let it outvote the jobs' differing `uses:` actions
+in `simhash`'s per-token weighting.
+
+The obvious-looking fix — give each *step* equal total weight
+regardless of its word count, so a verbose `run:` script can't out-vote
+a concise `uses:` step — was implemented, tested (a regression test
+reproducing this exact shape passed), and then re-vetted against the
+same real repo before being kept. That re-vet is what caught the
+problem: on the same corpus, cluster count went from 2 to 4, and one of
+the new clusters chained together four jobs with genuinely different
+purposes (a static-analysis job, a dependency-audit job, and two real
+test jobs) — all mutually >90% similar under equal-step-weighting,
+confirmed by checking pairwise similarity directly rather than trusting
+the cluster count alone. The common thread: PHP CI jobs in this repo
+share a `checkout` + `setup-php` + `composer install` prefix, which is
+routine environment setup, not duplication — but at 4-6 steps per job,
+that prefix is 50-75% of a job's steps, and equal-per-step weighting
+let routine setup dominate just as badly as verbose `run:` text did
+before, in the opposite direction.
+
+**Reverted to the original word-count-weighted scheme** — on this same
+real corpus it produced fewer false groupings (1 questionable pair, not
+a 4-job false clique) — and left the Nuclei/ZAP pair as a known,
+undecided imprecision, the same call the ruff vetting run made for
+`LEAN001` (see `VETTING_RUFF.md`) rather than shipping a fix that
+regressed on the exact data it was tested against. Two follow-ups this
+points at, neither a quick patch:
+
+- **IDF-style reweighting** (downweight tokens common across the
+  corpus, upweight rare ones) sounds like the standard fix, but doesn't
+  actually resolve this case: the shared guard clause is rare within a
+  *single scan's* small corpus (by construction — it's shared between
+  exactly the two jobs in question), so IDF would weight it *up*, not
+  down. It also cuts against this ADR's own portability requirement —
+  `Chunk.Signature` needs to mean the same thing across separate
+  `vlotpipe` invocations for the dashboard to compare fingerprints
+  cross-repo (see `Chunk`'s doc comment), and per-scan corpus-relative
+  weighting breaks that outright. If IDF is ever worth doing, it's a
+  dashboard-side computation over the full cross-repo corpus, not a
+  CLI-side one — another item for the already-deferred list above.
+- **Step-level granularity** (already deferred, see above) is the
+  actually-correct fix: it would report "these two jobs share one
+  duplicated step-window" rather than forcing a binary "these two whole
+  jobs are/aren't duplicates" verdict that neither weighting scheme can
+  give an honest answer to.
+
 ## Consequences
 
 - `internal/fingerprint` depends only on `internal/model` — no rule

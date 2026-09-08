@@ -1,8 +1,9 @@
 name: vlotpipe
 description: >-
-  Lint CI pipeline files (GitHub Actions, Azure Pipelines) for security,
-  performance, structural, and YAML style issues, with results posted as
-  inline pull request annotations.
+  Linter for CI pipelines — GitHub Actions and Azure Pipelines. Catches
+  injection, credential, and supply-chain mistakes, plus performance,
+  structural, and YAML style issues, with results posted as inline pull
+  request annotations.
 author: vlotra
 branding:
   icon: shield

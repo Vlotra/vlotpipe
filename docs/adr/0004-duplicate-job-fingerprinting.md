@@ -128,10 +128,10 @@ before, in the opposite direction.
 **Reverted to the original word-count-weighted scheme** — on this same
 real corpus it produced fewer false groupings (1 questionable pair, not
 a 4-job false clique) — and left the Nuclei/ZAP pair as a known,
-undecided imprecision, the same call the ruff vetting run made for
-`LEAN001` (see `VETTING_RUFF.md`) rather than shipping a fix that
-regressed on the exact data it was tested against. Two follow-ups this
-points at, neither a quick patch:
+undecided imprecision, the same call an earlier real-world vetting run
+made for `LEAN001` rather than shipping a fix that regressed on the
+exact data it was tested against. Two follow-ups this points at,
+neither a quick patch:
 
 - **IDF-style reweighting** (downweight tokens common across the
   corpus, upweight rare ones) sounds like the standard fix, but doesn't

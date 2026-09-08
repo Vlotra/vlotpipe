@@ -259,7 +259,7 @@ for why the surgical pass is the default instead.
 - [`docs/SELECTIVE_ENFORCEMENT.md`](SELECTIVE_ENFORCEMENT.md) — `select`/`report.select`: gate on a small rule set while still seeing the full backlog.
 - [`docs/CUSTOM_RULES.md`](CUSTOM_RULES.md) — the `custom_rules:` DSL.
 - [`docs/SECURITY_RESEARCH.md`](SECURITY_RESEARCH.md) / [`docs/LEAN_PIPELINES_RESEARCH.md`](LEAN_PIPELINES_RESEARCH.md) / [`docs/AZURE_RESEARCH.md`](AZURE_RESEARCH.md) — the research behind each rule category, including what deliberately *isn't* a rule and why.
-- [`docs/VETTING_*.md`](.) — real-world runs against ruff, vite, gin-vue-blog, aitos, dotnet/roslyn, and AvaloniaUI/Avalonia: what was found, what turned out to be a vlotpipe bug instead of a real issue, and how each was verified.
+- [`docs/TROPHY_CASE.md`](TROPHY_CASE.md) — real bugs found and fixed by running vlotpipe against real, actively-maintained pipelines.
 
 ## Full CLI reference
 

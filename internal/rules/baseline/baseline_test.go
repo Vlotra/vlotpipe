@@ -793,8 +793,8 @@ jobs:
 	}
 }
 
-// Regression test for the gap found vetting AvaloniaUI/Avalonia
-// (docs/VETTING_AVALONIA.md): Azure's task-based steps (task:
+// Regression test for the gap found vetting AvaloniaUI/Avalonia:
+// Azure's task-based steps (task:
 // CmdLine@2, PowerShell@2, Bash@3, AzureCLI@2) carry their inline
 // script in inputs.script/inlineScript, not step.Run — the first cut
 // of this rule only checked step.Run and silently missed both of

@@ -156,4 +156,4 @@ for the full reasoning behind the split.
 - [`docs/SECURITY_RESEARCH.md`](../SECURITY_RESEARCH.md) — the `SEC`/`SUPPLY` category research: OWASP's CI/CD Top 10, zizmor's audit catalog, and real incidents (tj-actions/changed-files, ArtiPACKED) behind each choice.
 - [`docs/LEAN_PIPELINES_RESEARCH.md`](../LEAN_PIPELINES_RESEARCH.md) — the `LEAN`/`PERF` category research.
 - [`docs/AZURE_RESEARCH.md`](../AZURE_RESEARCH.md) — what ports from GitHub Actions to Azure Pipelines and what doesn't, with the verified Azure YAML schema facts behind each `AZR*` rule.
-- [`docs/VETTING_*.md`](..) — real-world runs against ruff, vite, gin-vue-blog, aitos, dotnet/roslyn, and AvaloniaUI/Avalonia, including bugs found and fixed along the way (`SEC016` itself came out of the Avalonia run).
+- [`docs/TROPHY_CASE.md`](../TROPHY_CASE.md) — real bugs found and fixed by running vlotpipe against real pipelines (`SEC016` itself came out of one of those runs).

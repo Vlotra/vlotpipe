@@ -199,8 +199,8 @@ jobs:
 }
 
 // TestParseTaskInlineScriptPopulatesRun is a regression test for a gap
-// found vetting AvaloniaUI/Avalonia's azure-pipelines.yml
-// (docs/VETTING_AVALONIA.md): a script-running task (CmdLine@2,
+// found vetting AvaloniaUI/Avalonia's azure-pipelines.yml:
+// a script-running task (CmdLine@2,
 // PowerShell@2, Bash@3, AzureCLI@2, ...) carries its command in
 // inputs.script or inputs.inlineScript, not a top-level "script:"/
 // "bash:" key. Before this was surfaced into step.Run too, every rule

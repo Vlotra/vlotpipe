@@ -54,7 +54,7 @@ func (missingTestJob) Check(p *model.Pipeline) []rules.Violation {
 
 // DefaultMaxStepsPerJob is STRUCT002's threshold when .vlotpipe.yml
 // doesn't override it. Calibrated against real-world workflows vetted
-// while building vlotpipe (see docs/VETTING_*.md): even astral-sh/ruff's
+// while building vlotpipe: even astral-sh/ruff's
 // most complex CI jobs top out at 15 steps, so 20 catches genuine bloat
 // without flagging legitimately large, well-run jobs.
 const DefaultMaxStepsPerJob = 20

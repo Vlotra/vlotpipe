@@ -15,8 +15,8 @@ or reusable workflow says the repeated parts once, under a name, instead
 of spelling them out inline every time.
 
 The default threshold (20) isn't arbitrary — it's calibrated against
-real workflows vetted while building vlotpipe (see `docs/VETTING_*.md`):
-even astral-sh/ruff's most complex CI job tops out at 15 steps, so 20
+real workflows vetted while building vlotpipe: even astral-sh/ruff's
+most complex CI job tops out at 15 steps, so 20
 catches genuine bloat without flagging legitimately large, well-run
 jobs.
 

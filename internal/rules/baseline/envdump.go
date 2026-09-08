@@ -37,7 +37,7 @@ var envDumpPatterns = []*regexp.Regexp{
 // Applies equally to GitHub Actions "run:" and Azure Pipelines
 // "script:"/"bash:"/"powershell:"/"pwsh:" — the risk is in the shell
 // command itself, not anything platform-specific. Found while vetting
-// AvaloniaUI/Avalonia's azure-pipelines.yml (docs/VETTING_AVALONIA.md),
+// AvaloniaUI/Avalonia's azure-pipelines.yml,
 // which runs "printenv" as a debug step on two of its four jobs.
 type environmentDump struct{}
 

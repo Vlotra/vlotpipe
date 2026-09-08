@@ -6,9 +6,11 @@ the actual source before being called a bug at all. Every fix below
 shipped with a regression test named in this doc, so the specific
 real-world shape that broke it can't silently regress.
 
-See [`docs/VETTING_*.md`](.) for the full write-up of each run this
-came from — method, every finding spot-checked, what held up as a true
-positive.
+Every entry below only exists because it was verified as a real bug —
+not a hypothetical, not "this looked interesting," and not a case
+where the tool's own judgment merely got confirmed rather than
+corrected. That distinction matters enough to keep this page to bugs
+only.
 
 ## Managed cloud runners flagged as self-hosted (`SEC010`)
 
@@ -113,18 +115,3 @@ a GitHub Actions expression, so it needed its own detection. Built
 directly from this finding: [`SEC016`](rules/SEC016.md)
 (`environment-dump`), dual-platform, deliberately excluding safe
 single-variable forms (`printenv HOME`, `env FOO=bar some-command`).
-
-## Independent validation, not a bug — `SEC007` matched zizmor 1:1
-
-**Found vetting:** [astral-sh/ruff](https://github.com/astral-sh/ruff)
-
-Every one of 11 `SEC007` hits (`secrets: inherit` on reusable workflow
-calls in `release.yml`) already carries a `# zizmor: ignore[secrets-inherit]`
-comment in ruff's own source — ruff's maintainers run
-[zizmor](https://docs.zizmor.sh), hit this exact finding, and made a
-deliberate call to accept it (release orchestration fanning out to many
-publish targets). Zero false positives, zero false negatives, and
-independent confirmation that vlotpipe's rule matches a field-tested
-reference implementation's judgment on the same real repository — not a
-bug fixed, but the strongest kind of evidence a rule is calibrated
-right.

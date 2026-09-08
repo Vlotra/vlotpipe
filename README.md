@@ -74,9 +74,7 @@ far, each picked to stress a different angle:
 | [dotnet/roslyn](https://github.com/dotnet/roslyn) (Azure Pipelines) | Large (548-line), mature, advanced-feature pipeline maintained by Microsoft | Found a real parser bug on nested conditional insertion — fixed |
 | [AvaloniaUI/Avalonia](https://github.com/AvaloniaUI/Avalonia) (Azure Pipelines) | 31k+ stars, actively maintained, built partly by the team behind JetBrains Rider's UI | No timeout governance at all across the entire CI matrix — surfaced in under a second, zero config |
 
-Full write-up for each run — method, every finding spot-checked, bugs
-found and fixed along the way — in [`docs/VETTING_*.md`](docs). What
-those runs found and fixed, as bugs in vlotpipe itself, is in
+What these runs found and fixed, as bugs in vlotpipe itself, is in
 [`docs/TROPHY_CASE.md`](docs/TROPHY_CASE.md).
 
 ## Status

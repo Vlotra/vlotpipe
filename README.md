@@ -4,19 +4,10 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Tested against](https://img.shields.io/badge/tested_against-6_real_repos-brightgreen)](#tested-against)
 
-<!--
-Star history — live embed of real GitHub star data, not a static
-claim, so it's honest to include even pre-launch (shows flat/empty
-until this repo is public and has history). Commented out until then:
-star-history.com can't resolve a private repo at all, so the embed
-would just be a broken image, not merely an empty chart.
-
 [![Star History Chart](https://api.star-history.com/svg?repos=vlotra/vlotpipe&type=Date)](https://star-history.com/#vlotra/vlotpipe&Date)
--->
 
 **vlotpipe is a linter for CI pipelines — GitHub Actions and Azure
-Pipelines.** ("ruff for pipelines, and yamllint for pipelines," if
-you want the short version.)
+Pipelines.**
 
 Catch injection, credential, and supply-chain mistakes in your
 pipelines before they run:

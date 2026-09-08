@@ -177,3 +177,68 @@ func TestRuleRawIntAndStringSliceFromLoadedConfig(t *testing.T) {
 		t.Error("TIMEOUT001 should be fix-disabled")
 	}
 }
+
+// TestIgnoreAcceptsBareCodeShorthand proves "ignore: [SEC001, TIMEOUT001]"
+// — the obvious thing to type for "suppress these everywhere" — works
+// and suppresses the code repo-wide (path: "*"), instead of failing with
+// a raw YAML unmarshal error the way a bare string into a struct field
+// otherwise would.
+func TestIgnoreAcceptsBareCodeShorthand(t *testing.T) {
+	dir := t.TempDir()
+	yml := "ignore:\n  - SEC001\n  - TIMEOUT001\n"
+	if err := os.WriteFile(filepath.Join(dir, FileName), []byte(yml), 0o644); err != nil {
+		t.Fatalf("writing test config: %v", err)
+	}
+	cfg, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(cfg.Ignores) != 2 {
+		t.Fatalf("len(Ignores) = %d, want 2", len(cfg.Ignores))
+	}
+	for _, ig := range cfg.Ignores {
+		if ig.Path != "*" {
+			t.Errorf("shorthand entry %q: Path = %q, want \"*\"", ig.Code, ig.Path)
+		}
+	}
+	ignore := cfg.IgnoreFunc()
+	if !ignore("SEC001", "any/path/ci.yml") {
+		t.Error("SEC001 should be suppressed on any path via the shorthand entry")
+	}
+	if !ignore("TIMEOUT001", "any/path/ci.yml") {
+		t.Error("TIMEOUT001 should be suppressed on any path via the shorthand entry")
+	}
+	if ignore("SEC002", "any/path/ci.yml") {
+		t.Error("SEC002 was never listed, should not be suppressed")
+	}
+}
+
+// TestIgnoreMixesShorthandAndFullObjectForm proves both forms can
+// coexist in the same list, since a team migrating an existing
+// object-form ignore: shouldn't need to rewrite every entry to adopt
+// the shorthand for a new one.
+func TestIgnoreMixesShorthandAndFullObjectForm(t *testing.T) {
+	dir := t.TempDir()
+	yml := "ignore:\n" +
+		"  - SEC001\n" +
+		"  - code: STRUCT001\n" +
+		"    path: \"*\"\n" +
+		"    reason: \"job naming convention doesn't include test/lint yet\"\n" +
+		"    expires: \"2026-12-31\"\n"
+	if err := os.WriteFile(filepath.Join(dir, FileName), []byte(yml), 0o644); err != nil {
+		t.Fatalf("writing test config: %v", err)
+	}
+	cfg, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(cfg.Ignores) != 2 {
+		t.Fatalf("len(Ignores) = %d, want 2", len(cfg.Ignores))
+	}
+	if cfg.Ignores[0].Code != "SEC001" || cfg.Ignores[0].Reason != "" {
+		t.Errorf("shorthand entry = %+v, want Code=SEC001, Reason empty", cfg.Ignores[0])
+	}
+	if cfg.Ignores[1].Code != "STRUCT001" || cfg.Ignores[1].Reason == "" || cfg.Ignores[1].Expires != "2026-12-31" {
+		t.Errorf("full-object entry = %+v, want Reason/Expires preserved", cfg.Ignores[1])
+	}
+}

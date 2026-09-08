@@ -133,6 +133,28 @@ type Ignore struct {
 	Expires string `yaml:"expires"` // "2006-01-02"; empty means never
 }
 
+// UnmarshalYAML lets an ignore: entry be a bare code string, shorthand
+// for {code: <string>, path: "*"} with no reason/expiry, alongside the
+// full object form. "ignore: [SEC001, TIMEOUT001]" is the obvious thing
+// to type for "suppress these everywhere" — before this, it failed with
+// a raw "cannot unmarshal !!str `SEC001` into config.Ignore" instead of
+// working. Reason/expiry are only ever documented as recommended, never
+// required, so the shorthand's silent "no reason" isn't a new gap.
+func (ig *Ignore) UnmarshalYAML(node *yaml.Node) error {
+	if node.Kind == yaml.ScalarNode {
+		ig.Code = node.Value
+		ig.Path = "*"
+		return nil
+	}
+	type plain Ignore
+	var p plain
+	if err := node.Decode(&p); err != nil {
+		return err
+	}
+	*ig = Ignore(p)
+	return nil
+}
+
 // CustomRule is a declarative, org-defined policy check: no Go code, no
 // rebuild. It matches one field on every job (or every step, if
 // scope: step) against a literal value, a negated value, or a regex,

@@ -18,6 +18,18 @@ import (
 	"github.com/vlotra/vlotpipe/internal/model"
 )
 
+// Code identifies a duplicate-job-cluster finding for suppression
+// purposes — the same role every rules.Violation's Code plays, even
+// though a cluster isn't a rules.Violation (it can span multiple files,
+// which a single Violation's one Path can't represent). Supports the
+// same inline "# vlotpipe: ignore[DUP001]" comment on a job's key line
+// every other rule already supports (checked in BuildChunks below, via
+// model.Pipeline.IsSuppressed — no new parser needed), and the same
+// .vlotpipe.yml ignore: entries (checked by the caller, in main.go,
+// since path-based ignore: needs internal/config, which this package
+// deliberately doesn't depend on — see ADR 0004's Consequences).
+const Code = "DUP001"
+
 // DefaultThreshold is the similarity (0-1) above which two job signatures
 // are considered the same cluster. 0.90 rather than the 0.85 the source
 // research suggested: a job with 4-5 steps flips several simhash bits from
@@ -59,6 +71,9 @@ func BuildChunks(pipelines []*model.Pipeline) []Chunk {
 	for _, p := range pipelines {
 		for _, j := range p.Jobs {
 			if len(j.Steps) < minSteps {
+				continue
+			}
+			if p.IsSuppressed(j.Line, Code) {
 				continue
 			}
 			text := normalizeJob(j)

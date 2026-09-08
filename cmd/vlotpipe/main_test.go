@@ -582,3 +582,30 @@ func TestRunOmitsDuplicateTeaserForJSONFormat(t *testing.T) {
 		t.Errorf("stdout = %q, want no teaser text mixed into --format json output", out)
 	}
 }
+
+// TestRunConfigIgnoreDUP001SuppressesCluster proves ".vlotpipe.yml"'s
+// "ignore: [DUP001]" (the bare-code shorthand) suppresses a duplicate
+// cluster the same way it suppresses any other rule code — this is the
+// path-based half of DUP001 suppression (config), complementing the
+// inline "# vlotpipe: ignore[DUP001]" half already covered in
+// internal/fingerprint's own tests.
+func TestRunConfigIgnoreDUP001SuppressesCluster(t *testing.T) {
+	repo := t.TempDir()
+	dupJobWorkflow(t, repo, "a.yml", "3")
+	dupJobWorkflow(t, repo, "b.yml", "4")
+	cfgYAML := "ignore:\n  - DUP001\n"
+	if err := os.WriteFile(filepath.Join(repo, ".vlotpipe.yml"), []byte(cfgYAML), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	restore := resetFlags()
+	defer restore()
+
+	out := captureStdout(t, func() {
+		if _, err := run([]string{repo}, false, false); err != nil {
+			t.Fatalf("run: %v", err)
+		}
+	})
+	if strings.Contains(out, "duplicate job cluster") {
+		t.Errorf("stdout = %q, want no teaser — DUP001 ignored repo-wide via config", out)
+	}
+}

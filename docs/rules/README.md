@@ -26,6 +26,7 @@ Rule codes follow `<CATEGORY><NNN>`. Categories:
 - **LEAN** — pipeline files and build times staying short
 - **TIMEOUT** — job/step time bounds — GitHub-only (see `AZR001` for Azure)
 - **STRUCT** — pipeline structure and completeness — platform-neutral
+- **DUP** — near-duplicate jobs, possibly across different files — platform-neutral; see [`DUP001.md`](DUP001.md). Unlike every other category, a `DUP001` finding isn't a `rules.Violation` under the hood and doesn't appear in `--format json`/`github`/`azure-devops` output — see the page for why.
 
 ### Why a YAML category exists
 
@@ -142,6 +143,12 @@ for the full reasoning behind the split.
 | [TIMEOUT001](TIMEOUT001.md) | warning | yes | job with no `timeout-minutes` set |
 | [STRUCT001](STRUCT001.md) | info | | no job name suggests a test/lint/check step runs (GitHub + Azure) |
 | [STRUCT002](STRUCT002.md) | info | | job has more than 20 steps (configurable) — pipeline bloat/tidiness (GitHub + Azure) |
+
+## DUP
+
+| Code | Severity | Autofix | Checks |
+| --- | --- | --- | --- |
+| [DUP001](DUP001.md) | info | | job is a near-duplicate (≥90% structural similarity) of another job found in this scan (GitHub + Azure) |
 
 ## Research behind these rules
 

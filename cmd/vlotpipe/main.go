@@ -333,11 +333,25 @@ func run(paths []string, ci bool, formatFlagExplicit bool) (int, error) {
 	}
 
 	// Fingerprinting runs over every parsed pipeline regardless of
-	// severity floor/select — it's a structural property of the jobs
-	// themselves, not a violation, so none of the filtering above applies
-	// to it. Computed once and reused for both the local CLI teaser
-	// (text format only, see below) and the push payload.
+	// severity floor/select — those are violation-only concepts, and a
+	// duplicate-job cluster isn't a violation. It does still respect
+	// suppression, the same as everything else: inline "# vlotpipe:
+	// ignore[DUP001]" on a job's key line is already applied inside
+	// BuildChunks (via model.Pipeline.IsSuppressed); .vlotpipe.yml's
+	// path-based ignore: is applied here, since that needs cfg, which
+	// fingerprint deliberately doesn't depend on. Computed once and
+	// reused for both the local CLI teaser (text format only, see below)
+	// and the push payload — a chunk ignored here never reaches either.
 	fingerprintChunks := fingerprint.BuildChunks(pipelines)
+	{
+		kept := fingerprintChunks[:0]
+		for _, c := range fingerprintChunks {
+			if !ignore(fingerprint.Code, c.Path) {
+				kept = append(kept, c)
+			}
+		}
+		fingerprintChunks = kept
+	}
 	duplicateGroups := fingerprint.Cluster(fingerprintChunks, fingerprint.DefaultThreshold)
 
 	effectiveFormat := flagFormat

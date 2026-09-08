@@ -164,3 +164,16 @@ points at, neither a quick patch:
   way by this ADR: nothing here requires the hosted dashboard to exist,
   since `Chunk` fingerprints are computed and usable (for the local
   teaser) with `report.to` never configured at all.
+- **DUP001, added after real usage:** printing cluster detail (above)
+  immediately surfaced the need to suppress a specific finding — the
+  documented Nuclei/ZAP imprecision, in practice. A duplicate cluster
+  isn't a `rules.Violation` (it can span two files; a `Violation`'s one
+  `Path` can't represent that), so it needed its own suppression path
+  rather than reusing the violation pipeline outright. Landed as: a
+  `fingerprint.Code = "DUP001"` constant; inline `# vlotpipe:
+  ignore[DUP001]` on a job's key line, checked inside `BuildChunks` via
+  `model.Pipeline.IsSuppressed` (zero new parser code — it already
+  parses this comment for every rule); and `.vlotpipe.yml`'s path-based
+  `ignore:`, applied by the caller in `main.go` rather than inside
+  `fingerprint` itself, preserving the "no config dependency" property
+  above. See `docs/rules/DUP001.md`.

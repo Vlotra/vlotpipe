@@ -151,10 +151,41 @@ ignore:
     expires: "2026-12-31"
 ```
 
-Every exception needs a `reason`; `expires` is optional but recommended
-so a suppression doesn't quietly outlive the reason it was added. Full
-syntax (path globs, code lists) in the main
+`reason` and `expires` are both optional, but recommended — `reason` so
+the next person to read this file knows why, `expires` so a suppression
+doesn't quietly outlive the reason it was added. When neither matters
+(a quick local silence, no paper trail needed), a bare code string is
+shorthand for the same entry with no reason, applied to every path:
+
+```yaml
+ignore:
+  - SEC001
+  - TIMEOUT001
+```
+
+Full syntax (path globs, code lists, mixing shorthand and full-object
+entries in the same list) in the main
 [README](../README.md#suppressing-a-violation).
+
+**Duplicate-job findings (`DUP001`) suppress the same two ways** — inline
+on the job's key line, or repo-wide in `.vlotpipe.yml`:
+
+```yaml
+jobs:
+  test-frontend: # vlotpipe: ignore[DUP001]
+```
+
+```yaml
+ignore:
+  - code: DUP001
+    path: "dast.yml"
+    reason: "shared guard clause, not a real duplicate — see docs/rules/DUP001.md"
+```
+
+See [`docs/rules/DUP001.md`](rules/DUP001.md) for what this rule
+actually flags — unlike every other rule, it can span two different
+files, since a "duplicate" is a relationship between two jobs rather
+than a property of one.
 
 ## Org-specific policy
 

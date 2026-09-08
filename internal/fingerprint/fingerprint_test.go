@@ -26,6 +26,41 @@ func TestBuildChunksSkipsJobsBelowMinSteps(t *testing.T) {
 	}
 }
 
+// TestBuildChunksSkipsInlineSuppressedJob proves "# vlotpipe:
+// ignore[DUP001]" on a job's key line keeps that job out of
+// fingerprinting entirely — the same suppression mechanism every other
+// rule already supports, via model.Pipeline.IsSuppressed.
+func TestBuildChunksSkipsInlineSuppressedJob(t *testing.T) {
+	j := identicalTestJob()
+	j.Line = 5
+	p := &model.Pipeline{
+		Path:         "a.yml",
+		Jobs:         []model.Job{j},
+		Suppressions: map[int][]string{5: {Code}},
+	}
+	chunks := BuildChunks([]*model.Pipeline{p})
+	if len(chunks) != 0 {
+		t.Fatalf("BuildChunks with a DUP001-suppressed job = %d chunks, want 0", len(chunks))
+	}
+}
+
+// TestBuildChunksIgnoresSuppressionForADifferentCode proves suppressing
+// some other code on a job's line (e.g. a rule-specific suppression that
+// happens to share the line) doesn't accidentally suppress DUP001 too.
+func TestBuildChunksIgnoresSuppressionForADifferentCode(t *testing.T) {
+	j := identicalTestJob()
+	j.Line = 5
+	p := &model.Pipeline{
+		Path:         "a.yml",
+		Jobs:         []model.Job{j},
+		Suppressions: map[int][]string{5: {"SEC001"}},
+	}
+	chunks := BuildChunks([]*model.Pipeline{p})
+	if len(chunks) != 1 {
+		t.Fatalf("BuildChunks with only SEC001 suppressed = %d chunks, want 1 (DUP001 unaffected)", len(chunks))
+	}
+}
+
 func TestBuildChunksIncludesJobsAtMinSteps(t *testing.T) {
 	p := &model.Pipeline{
 		Path: "a.yml",

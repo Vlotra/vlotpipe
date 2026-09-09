@@ -20,6 +20,7 @@ published anywhere yet:
 git clone <this repo>
 cd vlotpipe
 go build -o vlotpipe ./cmd/vlotpipe
+./vlotpipe --version   # "vlotpipe version <v> (commit <sha>, built <date>)" — confirms the build
 ./vlotpipe --help
 ```
 

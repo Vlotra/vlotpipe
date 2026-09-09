@@ -72,6 +72,38 @@ func resetFlags() (restore func()) {
 	}
 }
 
+// TestVersionFlagPrintsBuildInfo builds the binary and runs it with
+// --version and -v, asserting the output matches the shape main() wires
+// into cobra's Version field: "<version> (commit <commit>, built
+// <date>)". A "go build" without -ldflags leaves version/commit/date at
+// their dev/unknown/unknown defaults — the honest state for a build from
+// source — so this asserts on the surrounding shape, not those
+// placeholder values.
+func TestVersionFlagPrintsBuildInfo(t *testing.T) {
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("go not on PATH")
+	}
+	bin := filepath.Join(t.TempDir(), "vlotpipe")
+	if out, err := exec.Command("go", "build", "-o", bin, ".").CombinedOutput(); err != nil {
+		t.Fatalf("go build: %v\n%s", err, out)
+	}
+
+	for _, flag := range []string{"--version", "-v"} {
+		out, err := exec.Command(bin, flag).CombinedOutput()
+		if err != nil {
+			t.Fatalf("%s %s: %v\n%s", bin, flag, err, out)
+		}
+		got := strings.TrimSpace(string(out))
+		// cobra's default version template: "<Name> version <Version>".
+		if !strings.HasPrefix(got, "vlotpipe version ") {
+			t.Errorf("%s: output = %q, want it to start with \"vlotpipe version \"", flag, got)
+		}
+		if !strings.Contains(got, "(commit ") || !strings.Contains(got, ", built ") || !strings.HasSuffix(got, ")") {
+			t.Errorf("%s: output = %q, want it to end with \"(commit <c>, built <d>)\"", flag, got)
+		}
+	}
+}
+
 func TestSyntaxViolationExtractsLineNumber(t *testing.T) {
 	cases := []struct {
 		name     string

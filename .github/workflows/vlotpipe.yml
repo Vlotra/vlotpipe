@@ -21,4 +21,10 @@ jobs:
           persist-credentials: false
       - uses: vlotra/vlotpipe@master # vlotpipe: ignore[SEC001] no tagged release exists yet; pin to one once it does
         with:
+          # Scan only this repo's real workflows. A plain "." would also
+          # sweep testdata/, which is full of deliberately-bad fixtures
+          # (hardcoded keys, unpinned actions) that exist to exercise the
+          # detection rules — they'd fail this gate on every PR regardless
+          # of the diff.
+          paths: .github/workflows
           fail-on: blocker
